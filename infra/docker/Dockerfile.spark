@@ -1,0 +1,15 @@
+FROM apache/spark:3.5.1-python3
+
+USER root
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/workspace
+
+WORKDIR /workspace
+
+COPY requirements/spark.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY pipelines ./pipelines
+COPY configs ./configs
+

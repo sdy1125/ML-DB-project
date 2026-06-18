@@ -1,0 +1,17 @@
+.git
+.env
+.venv
+**/__pycache__
+**/*.pyc
+**/node_modules
+**/dist
+**/target
+.pytest_cache
+.ruff_cache
+1.docx
+data/raw/*
+data/clean/*
+data/knowledge/*
+artifacts/*
+qdrant_storage
+minio_data

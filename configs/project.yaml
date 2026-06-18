@@ -1,0 +1,34 @@
+project:
+  id: sdg16
+  target: goal16
+  entity_column: country
+  time_column: year
+
+data:
+  input_glob: "/workspace/data/raw/*.csv"
+  clean_output: "/workspace/data/clean/sdg16.parquet"
+  deduplication_keys: ["country", "year"]
+  duplicate_strategy: "source_priority"
+  source_priority: ["sdr_2024", "esdr_2023", "sdr_2022"]
+  missing_strategy: "median"
+  max_missing_ratio: 0.80
+
+features:
+  required:
+    - n_sdg16_cpi
+    - n_sdg16_detain
+    - n_sdg16_justice
+    - n_sdg16_rsf
+    - n_sdg16_weaponsexp
+  optional_prefix: "n_sdg16_"
+  add_lag_features: false
+  add_rolling_features: false
+
+training:
+  train_end_year: 2018
+  validation_end_year: 2021
+  test_start_year: 2022
+  elastic_net_param: 0.0
+  reg_param: 0.0
+  standardization: true
+  artifact_dir: "/workspace/artifacts/linear_regression"

@@ -1,0 +1,171 @@
+name: sdg16-platform
+
+x-app-env: &app-env
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  RAW_DATA_DIR: /workspace/data/raw
+  CLEAN_DATA_DIR: /workspace/data/clean
+  KNOWLEDGE_DIR: /workspace/data/knowledge
+  ARTIFACT_DIR: /workspace/artifacts
+  MODEL_METADATA_PATH: /workspace/artifacts/linear_regression/metadata.json
+  QDRANT_URL: http://qdrant:6333
+  QDRANT_COLLECTION: ${QDRANT_COLLECTION:-sdg16_knowledge}
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-disabled}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+  LLM_PROVIDER: ${LLM_PROVIDER:-disabled}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  OLLAMA_URL: http://ollama:11434
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+
+services:
+  ml-api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    environment:
+      <<: *app-env
+    ports:
+      - "${ML_API_PORT:-8000}:8000"
+    volumes:
+      - ./artifacts:/workspace/artifacts:ro
+      - ./data/clean:/workspace/data/clean:ro
+      - ./configs:/workspace/configs:ro
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.backend
+    environment:
+      ML_SERVICE_URL: ${ML_SERVICE_URL:-http://ml-api:8000}
+      SERVER_PORT: 8080
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      ml-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.frontend
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost/ >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.5
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    profiles: ["data-lake"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sdg16}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-this-password}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  spark-master:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.spark
+    profiles: ["spark"]
+    command: /opt/spark/sbin/start-master.sh
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+
+  spark-worker:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.spark
+    profiles: ["spark"]
+    command: /opt/spark/sbin/start-worker.sh spark://spark-master:7077
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2g
+    depends_on:
+      - spark-master
+
+  pipeline:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.spark
+    profiles: ["jobs"]
+    environment:
+      <<: *app-env
+      SPARK_MASTER_URL: ${SPARK_MASTER_URL:-local[*]}
+    volumes:
+      - ./data:/workspace/data
+      - ./artifacts:/workspace/artifacts
+      - ./configs:/workspace/configs:ro
+    working_dir: /workspace
+    command: ["python", "-m", "pipelines.run_pipeline", "--help"]
+
+  rag-indexer:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    profiles: ["jobs"]
+    environment:
+      <<: *app-env
+    volumes:
+      - ./data/knowledge:/workspace/data/knowledge:ro
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    command: ["python", "-m", "rag.index_documents"]
+
+  ollama:
+    image: ollama/ollama:0.9.0
+    profiles: ["local-llm"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  qdrant_data:
+  minio_data:
+  ollama_data:
