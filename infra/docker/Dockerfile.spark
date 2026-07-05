@@ -11,5 +11,5 @@ COPY requirements/spark.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY pipelines ./pipelines
+COPY src ./src
 COPY configs ./configs
-

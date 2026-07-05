@@ -1,0 +1,285 @@
+schema_version: 1
+notes:
+  - "Đặt PDF vào data/knowledge/raw hoặc thư mục con theo group."
+  - "Parser sẽ match metadata theo filename/stem. Nếu chưa có file, entry vẫn nằm ở manifest để nhóm bổ sung sau."
+  - "Nhóm 1 và Nhóm 2 hiện chưa có link/file đầy đủ nên để trạng thái planned."
+
+documents:
+  - document_id: wef_gcr_2018
+    group: group_1_imd_wef_reports
+    title: "WEF Global Competitiveness Report 2018"
+    filename: "WEF_TheGlobalCompetitivenessReport2018.pdf"
+    year: 2018
+    organization: "World Economic Forum"
+    source_type: "competitiveness_report"
+    status: "planned_no_link"
+    use_for: "Khung GCI 4.0 và năng lực cạnh tranh quốc gia trong thời kỳ 4IR."
+
+  - document_id: wef_gcr_2019
+    group: group_1_imd_wef_reports
+    title: "WEF Global Competitiveness Report 2019"
+    filename: "WEF_TheGlobalCompetitivenessReport2019.pdf"
+    year: 2019
+    organization: "World Economic Forum"
+    source_type: "competitiveness_report"
+    status: "planned_no_link"
+    use_for: "12 pillars, 103 indicators, composite score và ánh xạ indicator sang policy."
+
+  - document_id: wef_gcr_2020
+    group: group_1_imd_wef_reports
+    title: "WEF Global Competitiveness Report 2020"
+    filename: "WEF_TheGlobalCompetitivenessReport2020.pdf"
+    year: 2020
+    organization: "World Economic Forum"
+    source_type: "competitiveness_report"
+    status: "planned_no_link"
+    use_for: "Resilience, agility, innovation, human capital và phục hồi sau Covid."
+
+  - document_id: imd_wcy_booklet_2022
+    group: group_1_imd_wef_reports
+    title: "IMD World Competitiveness Booklet 2022"
+    filename: "IMD World Competitiveness Bookle_2022.pdf"
+    year: 2022
+    organization: "IMD"
+    source_type: "competitiveness_report"
+    status: "planned_no_link"
+    use_for: "So sánh thay đổi thứ hạng sau Covid và yếu tố phục hồi năng lực cạnh tranh."
+
+  - document_id: imd_wcy_booklet_2024
+    group: group_1_imd_wef_reports
+    title: "IMD World Competitiveness Booklet 2024"
+    filename: "IMD World Competitiveness Bookle_2024.pdf"
+    year: 2024
+    organization: "IMD"
+    source_type: "competitiveness_report"
+    status: "planned_no_link"
+    use_for: "Country profiles, ranking tables, top strengths/weaknesses để benchmark."
+
+  - document_id: imd_wcy_booklet_2026
+    group: group_1_imd_wef_reports
+    title: "IMD World Competitiveness Booklet 2026"
+    filename: "IMD World Competitiveness Bookle_2026.pdf"
+    year: 2026
+    organization: "IMD"
+    source_type: "competitiveness_report"
+    status: "planned_no_link"
+    use_for: "Methodology mới nhất, hard data/survey data, 4 factors và 20 sub-factors."
+
+  - document_id: imd_wdcr_2025
+    group: group_1_imd_wef_reports
+    title: "IMD World Digital Competitiveness Ranking 2025"
+    filename: "WDCR_Report_2025.pdf"
+    year: 2025
+    organization: "IMD"
+    source_type: "digital_competitiveness_report"
+    status: "planned_no_link"
+    use_for: "Knowledge, technology, future readiness và policy cho kinh tế số."
+
+  - document_id: un_egov_survey_2024
+    group: group_1_imd_wef_reports
+    title: "UN E-Government Survey 2024"
+    filename: "UN E-Government Survey2024.pdf"
+    year: 2024
+    organization: "United Nations"
+    source_type: "governance_report"
+    status: "planned_no_link"
+    use_for: "Chính phủ điện tử, dữ liệu mở, dịch vụ công trực tuyến và citizen participation."
+
+  - document_id: world_bank_taking_stock_vietnam_2022
+    group: group_2_vietnam_country_reports
+    title: "World Bank Taking Stock: Vietnam Economic Growth Update 2022"
+    filename: "WorldBank_TakingStock_Vietnam_2022.pdf"
+    year: 2022
+    country: "Vietnam"
+    organization: "World Bank"
+    source_type: "country_report"
+    status: "planned_no_link"
+    use_for: "Tăng trưởng hậu Covid, FDI, xuất khẩu, đầu tư công, năng suất và nhân lực."
+
+  - document_id: world_bank_taking_stock_vietnam_2023
+    group: group_2_vietnam_country_reports
+    title: "World Bank Taking Stock: Vietnam Economic Growth Update 2023"
+    filename: "WorldBank_TakingStock_Vietnam_2023.pdf"
+    year: 2023
+    country: "Vietnam"
+    organization: "World Bank"
+    source_type: "country_report"
+    status: "planned_no_link"
+    use_for: "Dịch vụ, logistics, cải cách quy định, năng suất và đầu tư tư nhân."
+
+  - document_id: world_bank_taking_stock_vietnam_2024
+    group: group_2_vietnam_country_reports
+    title: "World Bank Taking Stock: Vietnam Economic Growth Update 2024"
+    filename: "WorldBank_TakingStock_Vietnam_2024.pdf"
+    year: 2024
+    country: "Vietnam"
+    organization: "World Bank"
+    source_type: "country_report"
+    status: "planned_no_link"
+    use_for: "Đổi mới sáng tạo, startup, chuyển giao công nghệ và competitiveness."
+
+  - document_id: imf_vietnam_article_iv_2023
+    group: group_2_vietnam_country_reports
+    title: "IMF Vietnam Article IV Consultation 2023"
+    filename: "IMF_Vietnam_Article_IV_2023.pdf"
+    year: 2023
+    country: "Vietnam"
+    organization: "IMF"
+    source_type: "country_report"
+    status: "planned_no_link"
+    use_for: "Ổn định vĩ mô, tài khóa, tiền tệ, ngân hàng, năng suất và môi trường đầu tư."
+
+  - document_id: imf_vietnam_article_iv_2024
+    group: group_2_vietnam_country_reports
+    title: "IMF Vietnam Article IV Consultation 2024"
+    filename: "IMF_Vietnam_Article_IV_2024.pdf"
+    year: 2024
+    country: "Vietnam"
+    organization: "IMF"
+    source_type: "country_report"
+    status: "planned_no_link"
+    use_for: "FDI, hạ tầng, chi tiêu công, tỷ giá, ngân hàng, doanh nghiệp và thể chế."
+
+  - document_id: singapore_edb_investment_2025
+    group: group_3_country_case_studies
+    title: "Singapore EDB Year 2025 in Review"
+    filename: "Singapore_EDB_Bao_cao_Dau_tu_2025.pdf"
+    year: 2025
+    country: "Singapore"
+    organization: "Singapore EDB"
+    source_type: "case_study"
+    link: "EDB Year 2025 in Review | Singapore EDB"
+    status: "has_link_or_title"
+    use_for: "FDI, R&D, AI, high-tech manufacturing và việc làm."
+
+  - document_id: singapore_economic_survey_2025
+    group: group_3_country_case_studies
+    title: "Economic Survey of Singapore 2025"
+    filename: "Singapore_Khao_sat_Kinh_te_2025.pdf"
+    year: 2025
+    country: "Singapore"
+    organization: "Ministry of Trade and Industry Singapore"
+    source_type: "case_study"
+    link: "Economic Survey of Singapore 2025 | Ministry of Trade and Industry"
+    status: "has_link_or_title"
+    use_for: "GDP, FDI, năng lực cạnh tranh và chính sách kinh tế."
+
+  - document_id: singapore_digital_economy_2024
+    group: group_3_country_case_studies
+    title: "Singapore Digital Economy Report 2024"
+    filename: "Singapore_Bao_cao_Kinh_te_So_2024.pdf"
+    year: 2024
+    country: "Singapore"
+    organization: "Singapore Government"
+    source_type: "case_study"
+    link: "Singapore Digital Economy Report 2024 (PDF)"
+    status: "has_link_or_title"
+    use_for: "Chuyển đổi số, AI, đổi mới sáng tạo và tác động tới tăng trưởng."
+
+  - document_id: thailand_boi_2022
+    group: group_3_country_case_studies
+    title: "BOI Thailand Annual Report 2022"
+    filename: "ThaiLan_Bao_cao_BOI_2022.pdf"
+    year: 2022
+    country: "Thailand"
+    organization: "Thailand BOI"
+    source_type: "case_study"
+    link: "BOI Thailand Annual Reports"
+    status: "has_link_or_title"
+    use_for: "Chính sách ưu đãi đầu tư và thu hút FDI."
+
+  - document_id: malaysia_mida_2022
+    group: group_3_country_case_studies
+    title: "Malaysia Investment Performance Report 2022"
+    filename: "Malaysia_Bao_cao_Dau_tu_MIDA_2022.pdf"
+    year: 2022
+    country: "Malaysia"
+    organization: "MIDA"
+    source_type: "case_study"
+    link: "Malaysia Investment Performance Report 2022 (PDF)"
+    status: "has_link_or_title"
+    use_for: "Kết quả thu hút FDI và các ngành ưu tiên."
+
+  - document_id: korea_oecd_economic_survey_2024
+    group: group_3_country_case_studies
+    title: "OECD Economic Survey Korea 2024"
+    filename: "HanQuoc_Khao_sat_Kinh_te_OECD_2024.pdf"
+    year: 2024
+    country: "Korea"
+    organization: "OECD"
+    source_type: "case_study"
+    link: "OECD Economic Survey Korea 2024 (PDF)"
+    status: "has_link_or_title"
+    use_for: "Cải cách năng suất, đổi mới sáng tạo, R&D và tăng trưởng."
+
+  - document_id: vietnam_science_innovation_strategy_2030
+    group: group_5_vietnam_policies
+    title: "Chiến lược phát triển khoa học, công nghệ và đổi mới sáng tạo đến năm 2030"
+    filename: "ChienLuoc_PhatTrien_KhoaHoc_CongNghe_DoiMoiSangTao_2030.pdf"
+    year: 2022
+    country: "Vietnam"
+    organization: "Vietnam Government"
+    source_type: "policy_document"
+    link: "Quyết định số 569/QĐ-TTg"
+    status: "has_link_or_title"
+    use_for: "Mục tiêu R&D, bằng sáng chế, khoa học công nghệ và đổi mới sáng tạo."
+
+  - document_id: vietnam_investment_law_2020
+    group: group_5_vietnam_policies
+    title: "Luật Đầu tư 2020"
+    filename: "Luat_DauTu_2020.pdf"
+    year: 2020
+    country: "Vietnam"
+    organization: "National Assembly of Vietnam"
+    source_type: "policy_document"
+    link: "Luật số 61/2020/QH14"
+    status: "has_link_or_title"
+    use_for: "Ưu đãi đầu tư, ngành nghề ưu tiên, môi trường đầu tư và FDI."
+
+  - document_id: vietnam_pci_2023
+    group: group_5_vietnam_policies
+    title: "Báo cáo PCI 2023"
+    filename: "BaoCao_PCI_2023.pdf"
+    year: 2023
+    country: "Vietnam"
+    organization: "PCI Vietnam"
+    source_type: "policy_report"
+    link: "https://pcivietnam.vn"
+    status: "has_link_or_title"
+    use_for: "Chất lượng điều hành, môi trường kinh doanh và thu hút đầu tư cấp tỉnh."
+
+  - document_id: vietnam_digital_transformation_2025_2030
+    group: group_5_vietnam_policies
+    title: "Chương trình Chuyển đổi số quốc gia đến năm 2025, định hướng đến năm 2030"
+    filename: "ChuongTrinh_ChuyenDoiSo_QuocGia_2025_2030.pdf"
+    year: 2020
+    country: "Vietnam"
+    organization: "Vietnam Government"
+    source_type: "policy_document"
+    link: "Quyết định số 749/QĐ-TTg"
+    status: "has_link_or_title"
+    use_for: "Chính phủ số, kinh tế số, xã hội số và năng lực cạnh tranh quốc gia."
+
+  - document_id: vietnam_fdi_resolution_50
+    group: group_5_vietnam_policies
+    title: "Nghị quyết 50-NQ/TW về thu hút FDI"
+    filename: "NghiQuyet_50_NQ_TW_ThuHut_FDI.pdf"
+    year: 2019
+    country: "Vietnam"
+    organization: "Politburo of Vietnam"
+    source_type: "policy_document"
+    link: "Nghị quyết số 50-NQ/TW ngày 20/8/2019"
+    status: "has_link_or_title"
+    use_for: "Hoàn thiện thể chế, nâng cao chất lượng và hiệu quả hợp tác đầu tư nước ngoài đến 2030."
+
+  - document_id: vietnam_admin_reform_2021_2030
+    group: group_5_vietnam_policies
+    title: "Chương trình cải cách hành chính nhà nước giai đoạn 2021–2030"
+    filename: "ChuongTrinh_CaiCach_HanhChinh_2021_2030.pdf"
+    year: 2021
+    country: "Vietnam"
+    organization: "Vietnam Government"
+    source_type: "policy_document"
+    link: "https://vanban.chinhphu.vn/?pageid=27160&docid=203657"
+    status: "has_link"
+    use_for: "Hiệu quả quản trị công, môi trường đầu tư và năng lực cạnh tranh."

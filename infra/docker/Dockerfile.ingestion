@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/workspace
+
+WORKDIR /workspace
+
+COPY requirements/ingestion.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY rag ./rag
+COPY src ./src
+COPY configs ./configs
+
+CMD ["python", "-m", "rag.parse_pdfs"]

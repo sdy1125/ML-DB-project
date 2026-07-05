@@ -7,11 +7,13 @@ from apps.api.app.schemas import (
     AskRequest,
     AskResponse,
     ExplainResponse,
+    FinalInsightResponse,
     PredictionRequest,
     PredictionResponse,
     SearchHit,
     SearchRequest,
 )
+from apps.api.app.services.insight_service import InsightService
 from apps.api.app.services.llm_service import LlmService
 from apps.api.app.services.model_service import ModelNotReadyError, ModelService
 from apps.api.app.services.rag_service import RagService
@@ -27,6 +29,8 @@ rag_service = RagService(
     api_key=settings.llm_api_key,
     base_url=settings.llm_base_url,
     ollama_url=settings.ollama_url,
+    chunks_path=settings.rag_chunks_path,
+    knowledge_dir=settings.knowledge_dir,
 )
 llm_service = LlmService(
     provider=settings.llm_provider,
@@ -35,6 +39,12 @@ llm_service = LlmService(
     base_url=settings.llm_base_url,
     ollama_url=settings.ollama_url,
     ollama_model=settings.ollama_model,
+)
+insight_service = InsightService(
+    model_service=model_service,
+    rag_service=rag_service,
+    llm_service=llm_service,
+    clean_sdg16_path=settings.clean_sdg16_path,
 )
 
 
@@ -118,12 +128,30 @@ def search(request: SearchRequest) -> list[SearchHit]:
     if not rag_service.enabled:
         raise HTTPException(
             status_code=503,
-            detail="Embedding provider is disabled; RAG search is not configured.",
+            detail="RAG search is not configured. Parse PDFs first or enable embeddings.",
         )
     try:
         return rag_service.search(request.query, request.limit)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"RAG unavailable: {exc}") from exc
+
+
+@app.get("/insights/final", response_model=FinalInsightResponse)
+def final_insight(
+    country: str = "Vietnam",
+    year: int | None = None,
+    use_llm: bool = True,
+) -> FinalInsightResponse:
+    try:
+        return insight_service.build_final_insight(
+            country=country,
+            year=year,
+            use_llm=use_llm,
+        )
+    except ModelNotReadyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Final insight unavailable: {exc}") from exc
 
 
 @app.post("/ask", response_model=AskResponse)
@@ -189,4 +217,3 @@ Hãy trả lời ngắn gọn và đề xuất tối đa 3 ưu tiên chính sác
         evidence=evidence,
         provider=llm_service.provider,
     )
-

@@ -11,7 +11,11 @@
 1.docx
 data/raw/*
 data/clean/*
-data/knowledge/*
+data/knowledge/raw/*
+data/knowledge/processed/*
+data/knowledge/text/*
 artifacts/*
 qdrant_storage
 minio_data
+rag/tailieuLLM-*/
+rag/tailieuLLM-*.zip

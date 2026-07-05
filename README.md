@@ -120,6 +120,28 @@ docker compose --profile jobs run --rm pipeline python -m pipelines.run_pipeline
 
 Mặc định RAG/LLM bị tắt để stack lõi chạy được mà không cần API key hoặc GPU.
 
+### Scan PDF local thành dữ liệu RAG
+
+Bộ PDF hiện nằm trong:
+
+```text
+rag/tailieuLLM-20260626T154614Z-3-001/tailieuLLM
+```
+
+Parser sẽ tự nhận diện `Nhóm 1`–`Nhóm 5` để gắn metadata cho RAG. Chạy:
+
+```powershell
+docker compose --profile jobs run --rm pdf-parser
+```
+
+Output:
+
+- `data/knowledge/processed/chunks.jsonl`
+- `data/knowledge/processed/parse_report.json`
+- `data/knowledge/text/*.txt`
+
+Chi tiết: [docs/knowledge-ingestion.md](docs/knowledge-ingestion.md).
+
 ### OpenAI-compatible
 
 Điền `.env`:
@@ -133,7 +155,7 @@ LLM_API_KEY=<secret>
 LLM_BASE_URL=<provider-base-url>
 ```
 
-Đưa văn bản đã parse vào `data/knowledge/*.txt`, sau đó:
+Sau khi đã parse PDF hoặc đưa văn bản `.txt` vào `data/knowledge/text`, chạy:
 
 ```powershell
 docker compose --profile jobs run --rm rag-indexer
@@ -150,12 +172,15 @@ docker compose exec ollama ollama pull qwen2.5:7b
 Sau đó đặt `LLM_PROVIDER=ollama`. Để embedding qua Ollama, đặt thêm
 `EMBEDDING_PROVIDER=ollama` và chọn một embedding model đã pull.
 
+Với demo hiện tại dùng Ollama `gemma3:4b` trên máy host và chưa cần embedding model,
+đọc hướng dẫn nhanh tại [docs/rag-ollama-demo.md](docs/rag-ollama-demo.md).
+
 ## 5. Các profile Docker
 
 | Lệnh | Thành phần |
 |---|---|
 | `docker compose up` | Vue + Spring Boot + FastAPI ML + Qdrant |
-| `--profile jobs` | Spark pipeline và RAG indexer chạy theo job |
+| `--profile jobs` | Spark pipeline, PDF parser và RAG indexer chạy theo job |
 | `--profile spark` | Spark master/worker |
 | `--profile data-lake` | MinIO |
 | `--profile local-llm` | Ollama |

@@ -46,15 +46,21 @@ const health = ref(null)
 const model = ref(null)
 const result = ref(null)
 const answer = ref(null)
+const finalInsight = ref(null)
 const question = ref('Việt Nam nên ưu tiên cải thiện chỉ số nào và vì sao?')
 const loadingAnalysis = ref(false)
 const loadingAnswer = ref(false)
+const loadingFinalInsight = ref(false)
 const error = ref('')
 
 const modelReady = computed(() => health.value?.model_ready === true)
 const topContributions = computed(() => result.value?.contributions?.slice(0, 5) || [])
 const maxContribution = computed(() => {
   const values = topContributions.value.map((item) => Math.abs(item.contribution))
+  return Math.max(...values, 0.001)
+})
+const finalWeakestMax = computed(() => {
+  const values = finalInsight.value?.weakest_indicators?.map((item) => Math.abs(item.contribution)) || []
   return Math.max(...values, 0.001)
 })
 
@@ -70,6 +76,10 @@ function payload() {
 
 function contributionWidth(value) {
   return `${Math.max((Math.abs(value) / maxContribution.value) * 100, 4)}%`
+}
+
+function finalContributionWidth(value) {
+  return `${Math.max((Math.abs(value) / finalWeakestMax.value) * 100, 4)}%`
 }
 
 function displayFeature(key) {
@@ -113,6 +123,22 @@ async function askAssistant() {
     error.value = assistantError.message
   } finally {
     loadingAnswer.value = false
+  }
+}
+
+async function generateFinalInsight() {
+  loadingFinalInsight.value = true
+  error.value = ''
+  try {
+    finalInsight.value = await analysisApi.finalInsight({
+      country: form.country,
+      year: Number(form.year),
+      useLlm: true,
+    })
+  } catch (insightError) {
+    error.value = insightError.message
+  } finally {
+    loadingFinalInsight.value = false
   }
 }
 
@@ -345,6 +371,86 @@ onMounted(loadStatus)
             <p>{{ answer.answer }}</p>
             <small v-if="answer.provider">Provider: {{ answer.provider }}</small>
           </div>
+        </div>
+      </section>
+
+      <section class="workspace-section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">FINAL OUTPUT</p>
+            <h2>Đích cuối: ML + Explainability + RAG + LLM</h2>
+          </div>
+          <p>
+            Hệ thống tự lấy metadata mô hình, xác định chỉ số kéo điểm Việt Nam xuống,
+            truy xuất tài liệu RAG và sinh khuyến nghị chính sách cuối.
+          </p>
+        </div>
+
+        <div class="result-panel">
+          <div class="panel-header">
+            <div>
+              <span class="step-label">06 / RAG + LLM</span>
+              <h3>Báo cáo tổng hợp cuối</h3>
+            </div>
+            <button class="analyze-button" type="button" :disabled="loadingFinalInsight" @click="generateFinalInsight">
+              {{ loadingFinalInsight ? 'Đang sinh báo cáo...' : 'Sinh output cuối' }}
+            </button>
+          </div>
+
+          <div v-if="!finalInsight" class="empty-result">
+            <div class="empty-icon">✦</div>
+            <h3>Chưa sinh output cuối</h3>
+            <p>Bấm nút để tạo báo cáo gồm điểm VN hiện tại, chỉ số yếu nhất, trạng thái drill-down tỉnh, kịch bản và khuyến nghị.</p>
+          </div>
+
+          <template v-else>
+            <div class="score-summary">
+              <div>
+                <span>Điểm VN hiện tại</span>
+                <strong>{{ finalInsight.current_score.toFixed(2) }}</strong>
+              </div>
+              <div>
+                <span>Điểm quan sát</span>
+                <strong>{{ finalInsight.observed_score?.toFixed(2) || 'N/A' }}</strong>
+              </div>
+              <div>
+                <span>Model</span>
+                <strong>{{ finalInsight.model_version }}</strong>
+              </div>
+            </div>
+
+            <div class="contribution-header">
+              <div>
+                <h4>Chỉ số kéo điểm xuống mạnh nhất</h4>
+                <p>{{ finalInsight.explainability_source }}</p>
+              </div>
+            </div>
+            <div class="contribution-list">
+              <div v-for="item in finalInsight.weakest_indicators.slice(0, 5)" :key="item.feature" class="contribution-row">
+                <div class="contribution-label">
+                  <strong>{{ item.label }}</strong>
+                  <span>{{ item.contribution.toFixed(3) }}</span>
+                </div>
+                <div class="bar-track">
+                  <span class="bar-negative" :style="{ width: finalContributionWidth(item.contribution) }"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="method-grid">
+              <article v-for="scenario in finalInsight.forecasts" :key="scenario.scenario">
+                <span>{{ scenario.scenario }}</span>
+                <h3>{{ scenario.predicted_score.toFixed(2) }}</h3>
+                <p>Δ so với hiện tại: {{ scenario.delta_vs_current > 0 ? '+' : '' }}{{ scenario.delta_vs_current.toFixed(2) }}</p>
+              </article>
+            </div>
+
+            <div class="answer-box">
+              <span class="answer-label">KHUYẾN NGHỊ CUỐI</span>
+              <p>{{ finalInsight.recommendation }}</p>
+              <small>{{ finalInsight.province.message }}</small>
+            </div>
+          </template>
         </div>
       </section>
 

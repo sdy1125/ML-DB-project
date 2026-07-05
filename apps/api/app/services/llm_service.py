@@ -1,5 +1,9 @@
 import httpx
-from openai import OpenAI
+
+try:
+    from openai import OpenAI
+except ModuleNotFoundError:  # pragma: no cover - Ollama/local disabled mode does not need it.
+    OpenAI = None
 
 
 class LlmService:
@@ -25,6 +29,8 @@ class LlmService:
 
     def answer(self, system_prompt: str, user_prompt: str) -> str:
         if self.provider in {"openai", "openai-compatible"}:
+            if OpenAI is None:
+                raise RuntimeError("Install openai to use OpenAI-compatible chat models.")
             client = OpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url or None,
@@ -59,4 +65,3 @@ class LlmService:
             "LLM đang tắt. Hãy đặt LLM_PROVIDER=openai, openai-compatible "
             "hoặc ollama để bật khuyến nghị sinh tự động."
         )
-

@@ -10,10 +10,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     clean_data_dir: Path = Path("/workspace/data/clean")
+    clean_sdg16_path: Path = Path("/workspace/data/clean/sdg16_spark.csv")
+    knowledge_dir: Path = Path("/workspace/data/knowledge")
     artifact_dir: Path = Path("/workspace/artifacts")
     model_metadata_path: Path = Path(
         "/workspace/artifacts/linear_regression/metadata.json"
     )
+    rag_chunks_path: Path = Path("/workspace/data/knowledge/processed/chunks.jsonl")
 
     qdrant_url: str = "http://qdrant:6333"
     qdrant_collection: str = "sdg16_knowledge"
@@ -37,4 +40,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

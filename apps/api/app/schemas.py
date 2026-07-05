@@ -54,3 +54,41 @@ class AskResponse(BaseModel):
     evidence: list[SearchHit] = []
     provider: str
 
+
+class IndicatorInsight(BaseModel):
+    feature: str
+    label: str
+    value: float
+    coefficient: float
+    contribution: float
+    direction: str
+
+
+class ScenarioForecast(BaseModel):
+    scenario: str
+    predicted_score: float
+    delta_vs_current: float
+    assumptions: dict[str, float]
+
+
+class ProvinceInsight(BaseModel):
+    data_status: str
+    message: str
+    weakest_province: str | None = None
+    weakest_score: float | None = None
+
+
+class FinalInsightResponse(BaseModel):
+    country: str
+    year: int
+    current_score: float
+    observed_score: float | None = None
+    model_version: str
+    explainability_source: str
+    weakest_indicators: list[IndicatorInsight]
+    strongest_indicators: list[IndicatorInsight]
+    forecasts: list[ScenarioForecast]
+    province: ProvinceInsight
+    evidence: list[SearchHit]
+    recommendation: str
+    provider: str

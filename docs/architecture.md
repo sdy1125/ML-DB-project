@@ -14,7 +14,7 @@ SDSN CSV ──> raw lake ──> Spark prepare ──> Parquet
                        Spark Pipeline                 metadata.json
                        (batch scoring)          (coefficients/scaler/metrics)
 
-Reports/PDF ──> Unstructured ──> chunks ──> embedding ──> Qdrant
+Reports/PDF ──> PDF parser ──> chunks ──> embedding ──> Qdrant
 
                             ONLINE / SERVING
 User ──> Vue/Nginx ──> Spring Boot BFF ──> FastAPI ML ──┬─> prediction

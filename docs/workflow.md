@@ -86,7 +86,7 @@ Definition of Done:
 
 Công việc:
 
-1. Parse PDF bằng Unstructured, giữ page/section/source metadata.
+1. Parse PDF bằng pypdf mặc định; chỉ bật Unstructured/OCR khi cần xử lý PDF scan ảnh.
 2. Chunk và embedding multilingual.
 3. Index Qdrant.
 4. Tạo prompt schema nhận dữ liệu ML dạng JSON.

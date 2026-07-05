@@ -14,6 +14,11 @@ export default defineConfig({
         target: process.env.VITE_DEV_API_TARGET || 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/ml': {
+        target: process.env.VITE_DEV_ML_TARGET || 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ml/, ''),
+      },
     },
   },
 })
