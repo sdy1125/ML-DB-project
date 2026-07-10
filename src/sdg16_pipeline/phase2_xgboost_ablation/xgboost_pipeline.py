@@ -9,7 +9,10 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import xgboost as xgb
-import optuna
+try:
+    import optuna
+except ImportError:  # Optuna is optional for local report/training runs.
+    optuna = None
 import joblib
 import json
 from pathlib import Path
@@ -18,6 +21,26 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+PROJECT_XGBOOST_BASELINE_PARAMS = {
+    'max_depth': 6,
+    'learning_rate': 0.1,
+    'subsample': 0.8,
+    'colsample_bytree': 0.8,
+    'n_estimators': 200,
+    'random_state': 42
+}
+
+TUNED_XGBOOST_PARAMS = {
+    'max_depth': 6,
+    'learning_rate': 0.1,
+    'subsample': 0.8,
+    'colsample_bytree': 0.8,
+    'n_estimators': 500,
+    'min_child_weight': 5,
+    'reg_lambda': 5.0,
+    'random_state': 42
+}
 
 class XGBoostPipeline:
     def __init__(self, config_path="configs/project.yaml"):
@@ -219,17 +242,17 @@ class XGBoostPipeline:
     
     def optimize_hyperparameters(self, X_train, y_train, n_trials=20):
         """Optimize XGBoost hyperparameters using Optuna"""
+
+        if optuna is None:
+            logger.warning(
+                "Optuna is not installed. Using tuned XGBoost parameters from "
+                "artifacts/core_model_tuning instead."
+            )
+            return TUNED_XGBOOST_PARAMS.copy()
         
         if len(X_train) < 50:
             logger.warning("Too few samples for hyperparameter optimization. Using default parameters.")
-            return {
-                'max_depth': 6,
-                'learning_rate': 0.1,
-                'subsample': 0.8,
-                'colsample_bytree': 0.8,
-                'n_estimators': 100,
-                'random_state': 42
-            }
+            return PROJECT_XGBOOST_BASELINE_PARAMS.copy()
         
         def objective(trial):
             params = {
@@ -237,11 +260,11 @@ class XGBoostPipeline:
                 'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3),
                 'subsample': trial.suggest_float('subsample', 0.6, 1.0),
                 'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
-                'n_estimators': trial.suggest_int('n_estimators', 100, 200),
+                'n_estimators': trial.suggest_int('n_estimators', 200, 600),
                 'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
                 'gamma': trial.suggest_float('gamma', 0.0, 0.5),
                 'reg_alpha': trial.suggest_float('reg_alpha', 0.0, 1.0),
-                'reg_lambda': trial.suggest_float('reg_lambda', 0.0, 1.0),
+                'reg_lambda': trial.suggest_float('reg_lambda', 0.0, 5.0),
                 'random_state': 42
             }
             
@@ -290,14 +313,7 @@ class XGBoostPipeline:
         if optimize:
             best_params = self.optimize_hyperparameters(X_train_scaled, y_train)
         else:
-            best_params = {
-                'max_depth': 6,
-                'learning_rate': 0.1,
-                'subsample': 0.8,
-                'colsample_bytree': 0.8,
-                'n_estimators': 200,
-                'random_state': 42
-            }
+            best_params = PROJECT_XGBOOST_BASELINE_PARAMS.copy()
         
         # Train model
         logger.info("Training XGBoost model...")
