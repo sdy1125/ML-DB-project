@@ -17,6 +17,7 @@ class Settings(BaseSettings):
         "/workspace/artifacts/linear_regression/metadata.json"
     )
     rag_chunks_path: Path = Path("/workspace/data/knowledge/processed/chunks.jsonl")
+    subnational_data_path: Path = Path("/workspace/data/subnational/sdg16_provinces.csv")
 
     qdrant_url: str = "http://qdrant:6333"
     qdrant_collection: str = "sdg16_knowledge"

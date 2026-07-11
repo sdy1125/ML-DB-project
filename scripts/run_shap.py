@@ -13,7 +13,10 @@ def main() -> int:
     except ModuleNotFoundError as exc:
         print(
             "Optional SHAP dependencies are not installed. "
-            "Run: pip install -r requirements/experiments.txt"
+            "The main project path does not need them; run "
+            "python scripts/run_shap_sdg16_vietnam.py instead. "
+            "If you really need the legacy SHAPAnalyzer, install "
+            "requirements/shap-optional.txt with Python 3.11/3.12 or C++ Build Tools."
         )
         print(f"Missing module: {exc.name}")
         return 1

@@ -8,9 +8,17 @@ Subnational Analysis for Vietnam
 
 import pandas as pd
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import seaborn as sns
-from linearmodels.panel import PanelOLS, PooledOLS
+try:
+    from linearmodels.panel import PanelOLS, PooledOLS
+except ModuleNotFoundError:  # optional; fallback to statsmodels OLS below.
+    PanelOLS = None
+    PooledOLS = None
 import statsmodels.api as sm
 import json
 from pathlib import Path
@@ -241,6 +249,21 @@ class SubnationalAnalyzer:
         y = df_panel[target]
         X = df_panel[features]
         X = sm.add_constant(X)
+
+        if PanelOLS is None:
+            logger.warning("linearmodels is not installed. Falling back to statsmodels OLS.")
+            results = sm.OLS(y, X).fit()
+            return {
+                'r2_within': float(results.rsquared),
+                'r2_between': float(results.rsquared),
+                'r2_overall': float(results.rsquared),
+                'params': {key: float(value) for key, value in results.params.to_dict().items()},
+                'pvalues': {key: float(value) for key, value in results.pvalues.to_dict().items()},
+                'nobs': int(results.nobs),
+                'features_used': features,
+                'target': target,
+                'estimator': 'statsmodels_ols_fallback',
+            }
         
         # Entity Fixed Effects
         model = PanelOLS(y, X, entity_effects=True)

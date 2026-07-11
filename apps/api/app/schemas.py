@@ -66,6 +66,7 @@ class IndicatorInsight(BaseModel):
 
 class ScenarioForecast(BaseModel):
     scenario: str
+    year: int
     predicted_score: float
     delta_vs_current: float
     assumptions: dict[str, float]

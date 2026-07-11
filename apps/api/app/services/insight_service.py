@@ -1,4 +1,5 @@
 import csv
+import json
 from pathlib import Path
 
 from apps.api.app.schemas import (
@@ -50,12 +51,16 @@ class InsightService:
         rag_service: RagService,
         llm_service: LlmService,
         clean_sdg16_path: Path,
+        subnational_data_path: Path | None = None,
         shap_output_dir: Path | None = None,
     ):
         self.model_service = model_service
         self.rag_service = rag_service
         self.llm_service = llm_service
         self.clean_sdg16_path = clean_sdg16_path
+        self.subnational_data_path = subnational_data_path or Path(
+            "data/subnational/sdg16_provinces.csv"
+        )
         self.shap_output_dir = shap_output_dir or Path("shap_output")
 
     def build_final_insight(
@@ -92,20 +97,17 @@ class InsightService:
         if shap_rows:
             indicator_rows = shap_rows
             explainability_source = "shap_gap_analysis_csv"
+        shap_current_score = self._load_shap_current_score(country)
+        if shap_current_score is not None:
+            current_score = shap_current_score
+            explainability_source = f"{explainability_source}+xgboost_shap_summary"
 
         weakest = sorted(indicator_rows, key=lambda item: item.contribution)[:5]
         strongest = sorted(indicator_rows, key=lambda item: item.contribution, reverse=True)[:5]
         forecasts = self._scenario_forecasts(country, year, features, current_score, weakest)
 
         evidence = self._retrieve_policy_evidence(country, weakest)
-        province = ProvinceInsight(
-            data_status="missing_provincial_dataset",
-            message=(
-                "Chưa có dataset PAPI/PCI cấp tỉnh trong project, nên hệ thống chưa kết luận "
-                "tỉnh nào tệ nhất. Khi thêm dữ liệu tỉnh, phase drill-down có thể map top "
-                "chỉ số yếu sang province-level FE."
-            ),
-        )
+        province = self._province_insight(weakest)
 
         recommendation = self._recommendation(
             country=country,
@@ -124,7 +126,11 @@ class InsightService:
             year=year,
             current_score=round(current_score, 4),
             observed_score=round(observed_score, 4) if observed_score is not None else None,
-            model_version=artifact.model_version,
+            model_version=(
+                "xgboost_shap_runner+gru_forecast+subnational_drilldown"
+                if shap_current_score is not None
+                else artifact.model_version
+            ),
             explainability_source=explainability_source,
             weakest_indicators=weakest,
             strongest_indicators=strongest,
@@ -208,7 +214,7 @@ class InsightService:
                 rows.append(
                     IndicatorInsight(
                         feature=feature,
-                        label=row.get("label") or feature_label(feature),
+                        label=feature_label(feature),
                         value=value,
                         coefficient=artifact.coefficients.get(feature, 0.0),
                         contribution=contribution,
@@ -216,6 +222,23 @@ class InsightService:
                     )
                 )
         return rows
+
+    def _load_shap_current_score(self, country: str) -> float | None:
+        if country.lower() not in {"vietnam", "viet nam", "việt nam"}:
+            return None
+
+        summary_candidates = [
+            self.shap_output_dir / "shap_summary.json",
+            Path("artifacts") / "shap" / "shap_summary.json",
+        ]
+        summary_path = next((path for path in summary_candidates if path.exists()), None)
+        if summary_path is None:
+            return None
+        try:
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            return float(payload["vietnam_latest_predicted"])
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return None
 
     def _scenario_forecasts(
         self,
@@ -225,38 +248,138 @@ class InsightService:
         current_score: float,
         weakest: list[IndicatorInsight],
     ) -> list[ScenarioForecast]:
-        scenarios = {
-            "pessimistic": -5.0,
-            "base": 0.0,
-            "optimistic": 10.0,
+        gru_outputs = self._gru_scenario_forecasts(year, current_score, weakest)
+        if gru_outputs:
+            return gru_outputs
+
+        scenario_progress_per_year = {
+            "pessimistic": 0.04,
+            "base": 0.12,
+            "optimistic": 0.22,
         }
         outputs = []
-        target_features = [item.feature for item in weakest[:3]]
-        for name, delta in scenarios.items():
-            scenario_features = dict(features)
-            assumptions = {}
-            for item in weakest[:3]:
-                feature = item.feature
-                current = scenario_features.get(feature, 0.0)
-                direction = 1.0 if item.coefficient >= 0 else -1.0
-                scenario_features[feature] = clamp_score(current + delta * direction)
-                assumptions[feature] = scenario_features[feature]
-            score, _ = self.model_service.predict(
-                PredictionRequest(
-                    country=country,
-                    year=year,
-                    features=scenario_features,
+        benchmark_targets = self._benchmark_targets()
+        forecast_start = max(year + 1, 2024)
+        forecast_end = 2030
+
+        for name, annual_progress in scenario_progress_per_year.items():
+            for forecast_year in range(forecast_start, forecast_end + 1):
+                years_ahead = forecast_year - year
+                progress = min(1.0, max(0.0, annual_progress * years_ahead))
+                scenario_features = dict(features)
+                assumptions = {}
+                for item in weakest[:3]:
+                    feature = item.feature
+                    current = float(features.get(feature, scenario_features.get(feature, 0.0)))
+                    target = benchmark_targets.get(feature)
+                    if target is None:
+                        direction = 1.0 if item.coefficient >= 0 else -1.0
+                        target = clamp_score(current + 20.0 * direction)
+                    next_value = clamp_score(current + (target - current) * progress)
+                    scenario_features[feature] = next_value
+                    assumptions[feature] = round(next_value, 4)
+
+                score, _ = self.model_service.predict(
+                    PredictionRequest(
+                        country=country,
+                        year=forecast_year,
+                        features=scenario_features,
+                    )
                 )
-            )
-            outputs.append(
-                ScenarioForecast(
-                    scenario=name,
-                    predicted_score=round(score, 4),
-                    delta_vs_current=round(score - current_score, 4),
-                    assumptions=assumptions,
+                outputs.append(
+                    ScenarioForecast(
+                        scenario=name,
+                        year=forecast_year,
+                        predicted_score=round(score, 4),
+                        delta_vs_current=round(score - current_score, 4),
+                        assumptions=assumptions,
+                    )
                 )
-            )
         return outputs
+
+    def _gru_scenario_forecasts(
+        self,
+        year: int,
+        current_score: float,
+        weakest: list[IndicatorInsight],
+    ) -> list[ScenarioForecast]:
+        forecast_candidates = [
+            Path("artifacts") / "gru" / "vietnam_forecast_2024_2030.csv",
+        ]
+        forecast_path = next((path for path in forecast_candidates if path.exists()), None)
+        if forecast_path is None:
+            return []
+
+        baseline_rows: list[tuple[int, float]] = []
+        with forecast_path.open("r", encoding="utf-8-sig", newline="") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                try:
+                    forecast_year = int(float(row.get("year", "")))
+                    score = float(row.get("predicted_goal16", ""))
+                except ValueError:
+                    continue
+                if forecast_year > year:
+                    baseline_rows.append((forecast_year, score))
+
+        if not baseline_rows:
+            return []
+
+        scenario_adjustment_per_year = {
+            "pessimistic": -0.15,
+            "base": 0.0,
+            "optimistic": 0.35,
+        }
+        benchmark_targets = self._benchmark_targets()
+        first_forecast_year = min(row[0] for row in baseline_rows)
+        outputs: list[ScenarioForecast] = []
+
+        for scenario, annual_adjustment in scenario_adjustment_per_year.items():
+            for forecast_year, baseline_score in baseline_rows:
+                years_ahead = forecast_year - first_forecast_year + 1
+                predicted_score = clamp_score(baseline_score + annual_adjustment * years_ahead)
+                assumptions = {
+                    "gru_baseline": round(baseline_score, 4),
+                }
+                if scenario != "base":
+                    for item in weakest[:3]:
+                        target = benchmark_targets.get(item.feature)
+                        if target is not None:
+                            assumptions[item.feature] = round(target, 4)
+                outputs.append(
+                    ScenarioForecast(
+                        scenario=scenario,
+                        year=forecast_year,
+                        predicted_score=round(predicted_score, 4),
+                        delta_vs_current=round(predicted_score - current_score, 4),
+                        assumptions=assumptions,
+                    )
+                )
+        return outputs
+
+    def _benchmark_targets(self) -> dict[str, float]:
+        candidates = [
+            self.shap_output_dir / "gap_analysis.csv",
+            Path("artifacts") / "shap" / "gap_analysis.csv",
+            Path("shap_output") / "gap_analysis.csv",
+        ]
+        gap_path = next((path for path in candidates if path.exists()), None)
+        if gap_path is None:
+            return {}
+
+        targets: dict[str, float] = {}
+        with gap_path.open("r", encoding="utf-8-sig", newline="") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                feature = row.get("feature")
+                if not feature:
+                    continue
+                try:
+                    target = float(row.get("top20_mean", "") or "")
+                except ValueError:
+                    continue
+                targets[feature] = clamp_score(target)
+        return targets
 
     def _retrieve_policy_evidence(
         self,
@@ -276,6 +399,101 @@ class InsightService:
         except Exception:
             return []
 
+    def _province_insight(self, weakest: list[IndicatorInsight]) -> ProvinceInsight:
+        data_path_candidates = [
+            self.subnational_data_path,
+            Path("data/subnational/sdg16_provinces.csv"),
+            Path("data/subnational/sdg16_provinces_demo.csv"),
+        ]
+        data_path = next((path for path in data_path_candidates if path.exists()), None)
+        if data_path is None:
+            return ProvinceInsight(
+                data_status="missing_provincial_dataset",
+                message=(
+                    "Chưa có dataset PAPI/PCI cấp tỉnh trong project, nên hệ thống chưa kết luận "
+                    "tỉnh nào tệ nhất. Khi thêm dữ liệu tỉnh, phase drill-down có thể map top "
+                    "chỉ số yếu sang province-level FE."
+                ),
+            )
+
+        rows = []
+        with data_path.open("r", encoding="utf-8-sig", newline="") as file:
+            reader = csv.DictReader(file)
+            for raw in reader:
+                row = {str(key).strip().lower(): value for key, value in raw.items()}
+                province = row.get("province") or row.get("tinh") or row.get("province_name")
+                if not province:
+                    continue
+                try:
+                    year = int(float(row.get("year", 0)))
+                except ValueError:
+                    continue
+                score = self._first_float(row, ["goal16", "papi_score", "pci_score"])
+                if score is None:
+                    continue
+                rows.append((year, province, score, row))
+
+        if not rows:
+            return ProvinceInsight(
+                data_status="invalid_provincial_dataset",
+                message=(
+                    f"Đã tìm thấy {data_path}, nhưng chưa đọc được cột province/year/goal16 "
+                    "hoặc các cột điểm PAPI/PCI thay thế."
+                ),
+            )
+
+        latest_year = max(year for year, _, _, _ in rows)
+        latest_rows = [row for row in rows if row[0] == latest_year]
+        _, weakest_province, weakest_score, weakest_row = min(
+            latest_rows, key=lambda item: item[2]
+        )
+
+        dimension_map = {
+            "n_sdg16_cpi": "bribery_people",
+            "n_sdg16_admin": "admin_procedure",
+            "n_sdg16_justice": "vertical_accountability",
+            "n_sdg16_power": "transparency",
+            "n_sdg16_security": "citizen_participation",
+        }
+        province_weak_dims = []
+        for item in weakest[:5]:
+            mapped = dimension_map.get(item.feature)
+            if not mapped:
+                continue
+            value = self._first_float(weakest_row, [mapped])
+            if value is not None:
+                province_weak_dims.append(f"{mapped}={value:.2f}")
+
+        is_demo = "demo" in data_path.name or str(weakest_row.get("source", "")).lower().startswith("demo")
+        status = "demo_provincial_dataset" if is_demo else "ready"
+        source_note = "Dataset hiện là demo/mock, cần thay bằng PAPI/PCI thật trước khi kết luận chính thức." if is_demo else "Dataset PAPI/PCI cấp tỉnh đã sẵn sàng."
+        dims_text = (
+            f" Các chiều yếu liên quan: {', '.join(province_weak_dims)}."
+            if province_weak_dims
+            else ""
+        )
+        return ProvinceInsight(
+            data_status=status,
+            message=(
+                f"{source_note} Năm {latest_year}, tỉnh yếu nhất theo goal16/PAPI-PCI là "
+                f"{weakest_province} với điểm {weakest_score:.2f}.{dims_text}"
+            ),
+            weakest_province=weakest_province,
+            weakest_score=round(weakest_score, 4),
+        )
+
+    @staticmethod
+    def _first_float(row: dict[str, str], keys: list[str]) -> float | None:
+        for key in keys:
+            raw = row.get(key)
+            if raw in {None, ""}:
+                continue
+            try:
+                return float(raw)
+            except ValueError:
+                continue
+        return None
+
     def _recommendation(
         self,
         country: str,
@@ -294,7 +512,7 @@ class InsightService:
             for item in weakest
         )
         forecast_text = "\n".join(
-            f"- {item.scenario}: score={item.predicted_score:.2f}, "
+            f"- {item.scenario} {item.year}: score={item.predicted_score:.2f}, "
             f"delta={item.delta_vs_current:+.2f}"
             for item in forecasts
         )
@@ -309,13 +527,17 @@ class InsightService:
                 f"Điểm mô hình hiện tại của {country} năm {year}: {current_score:.2f}. "
                 f"Nhóm chỉ số cần ưu tiên gồm: "
                 f"{', '.join(item.label for item in weakest[:3])}. "
+                f"Drill-down cấp tỉnh: {province.message} "
+                "Dự báo 2024-2030 được lấy từ GRU baseline và ba kịch bản pessimistic/base/optimistic. "
                 "Khuyến nghị sơ bộ: tập trung cải cách thể chế, minh bạch hóa thực thi, "
-                "và gắn cải thiện chỉ số với chương trình chuyển đổi số/chất lượng dịch vụ công."
+                "nâng khả năng tiếp cận tư pháp, bảo vệ quyền tài sản và gắn cải thiện chỉ số "
+                "với chương trình chuyển đổi số/chất lượng dịch vụ công."
             )
 
         system_prompt = (
             "Bạn là trợ lý chính sách cho đề tài năng lực cạnh tranh quốc gia. "
-            "Chỉ dùng số liệu mô hình, SHAP/contribution fallback và evidence RAG được cung cấp. "
+            "Chỉ dùng số liệu mô hình, SHAP/contribution fallback, GRU forecast, drill-down tỉnh "
+            "và evidence RAG được cung cấp. "
             "Không bịa dữ liệu tỉnh nếu province dataset đang thiếu. Trả lời tiếng Việt, có cấu trúc."
         )
         user_prompt = f"""
@@ -343,6 +565,6 @@ Hãy trả về:
 2. Chỉ số yếu nhất cần ưu tiên.
 3. Trạng thái tỉnh tệ nhất: nếu thiếu dataset thì nói rõ chưa kết luận.
 4. Ba khuyến nghị chính sách cụ thể, có liên hệ evidence.
-5. Một đoạn cảnh báo phương pháp: contribution hiện là fallback từ metadata nếu chưa có shap_output.
+5. Một đoạn cảnh báo phương pháp: SHAP/contribution giải thích hành vi mô hình, không tự chứng minh quan hệ nhân quả.
 """.strip()
         return self.llm_service.answer(system_prompt, user_prompt)

@@ -45,6 +45,7 @@ insight_service = InsightService(
     rag_service=rag_service,
     llm_service=llm_service,
     clean_sdg16_path=settings.clean_sdg16_path,
+    subnational_data_path=settings.subnational_data_path,
 )
 
 
@@ -191,12 +192,21 @@ def ask(request: AskRequest) -> AskResponse:
             evidence = []
 
     context = "\n\n".join(
-        f"[Nguồn {i + 1}] {hit.text}" for i, hit in enumerate(evidence)
+        (
+            f"[Nguồn {i + 1}] "
+            f"source={hit.metadata.get('source', 'unknown')}; "
+            f"group={hit.metadata.get('group', 'unknown')}; "
+            f"page={hit.metadata.get('page_start', '?')}-{hit.metadata.get('page_end', '?')}\n"
+            f"{hit.text}"
+        )
+        for i, hit in enumerate(evidence)
     )
     system_prompt = (
         "Bạn là trợ lý phân tích chính sách SDG16. Chỉ đưa ra kết luận dựa trên "
-        "số liệu mô hình và tài liệu được cung cấp. Phân biệt rõ dự đoán, bằng "
-        "chứng và giả định; không bịa số liệu. Trả lời bằng tiếng Việt."
+        "số liệu mô hình và tài liệu PDF/RAG được cung cấp. Khi khuyến nghị, phải "
+        "nêu rõ nguồn PDF liên quan theo dạng [Nguồn 1: tên_file.pdf, trang x-y]. "
+        "Phân biệt rõ dự đoán, bằng chứng và giả định; không bịa số liệu. "
+        "Trả lời bằng tiếng Việt."
     )
     user_prompt = f"""
 Câu hỏi: {request.question}
@@ -209,6 +219,8 @@ Tài liệu truy xuất:
 {context or "Không có tài liệu RAG."}
 
 Hãy trả lời ngắn gọn và đề xuất tối đa 3 ưu tiên chính sách có căn cứ.
+Yêu cầu: mỗi khuyến nghị phải gắn với ít nhất một nguồn PDF/RAG nếu có evidence.
+Nếu evidence không đủ mạnh, nói rõ hạn chế thay vì suy diễn.
 """.strip()
 
     return AskResponse(

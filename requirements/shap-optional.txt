@@ -1,0 +1,7 @@
+# Optional only for the legacy SHAPAnalyzer / API route copied from experiments.
+# The main project SHAP runner does NOT need this package:
+#   python scripts/run_shap_sdg16_vietnam.py
+#
+# On Windows + Python 3.13, shap may try to compile from source and require
+# Microsoft C++ Build Tools. Prefer Python 3.11/3.12 if you really need this.
+shap==0.46.0

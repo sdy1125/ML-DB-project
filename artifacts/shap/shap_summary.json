@@ -5,99 +5,112 @@
   "train_rows": 3477,
   "validation_rows": 549,
   "test_rows": 366,
-  "base_value": 63.07285690307617,
+  "base_value": 63.028499603271484,
+  "selected_params": {
+    "max_depth": 4,
+    "learning_rate": 0.09,
+    "n_estimators": 850,
+    "subsample": 0.82,
+    "colsample_bytree": 0.82,
+    "reg_alpha": 0.5,
+    "reg_lambda": 1.0,
+    "random_state": 42,
+    "tree_method": "hist",
+    "objective": "reg:squarederror"
+  },
+  "tuning_candidates": 28,
   "metrics": {
     "validation": {
-      "r2": 0.9923854967919856,
-      "rmse": 1.304724215629975,
-      "mae": 0.9592043653231059
+      "r2": 0.9936807801057473,
+      "rmse": 1.1885834259309218,
+      "mae": 0.850220390974123
     },
     "test": {
-      "r2": 0.9844294712812733,
-      "rmse": 1.9166963212372343,
-      "mae": 1.4682624673245654
+      "r2": 0.985885046339598,
+      "rmse": 1.824909607955278,
+      "mae": 1.401930452952108
     }
   },
   "vietnam_latest_year": 2023,
   "vietnam_latest_actual": 63.7269090909091,
-  "vietnam_latest_predicted": 65.3974838256836,
+  "vietnam_latest_predicted": 64.09632873535156,
   "top_negative_vn2022": [
     {
       "feature": "n_sdg16_rsf",
       "label": "Tự do báo chí (RSF)",
-      "shap_vn2022": -1.7790193557739258
-    },
-    {
-      "feature": "n_sdg16_exprop",
-      "label": "Chống tịch thu tài sản",
-      "shap_vn2022": -1.745589256286621
+      "shap_vn2022": -2.3477447032928467
     },
     {
       "feature": "n_sdg16_justice",
       "label": "Tiếp cận tư pháp",
-      "shap_vn2022": -1.2335247993469238
+      "shap_vn2022": -1.9228219985961914
+    },
+    {
+      "feature": "n_sdg16_exprop",
+      "label": "Chống tịch thu tài sản",
+      "shap_vn2022": -1.396231770515442
     },
     {
       "feature": "n_sdg16_clabor",
       "label": "Lao động trẻ em",
-      "shap_vn2022": -0.6470481157302856
+      "shap_vn2022": -0.5345646739006042
     },
     {
       "feature": "n_sdg16_admin",
       "label": "Hành chính minh bạch",
-      "shap_vn2022": -0.5092980861663818
+      "shap_vn2022": -0.3568480312824249
     }
   ],
   "top_global_importance": [
     {
       "feature": "n_sdg16_cpi",
       "label": "Chống tham nhũng (CPI)",
-      "mean_abs_shap": 5.945846080780029
+      "mean_abs_shap": 5.625399589538574
     },
     {
       "feature": "n_sdg16_u5reg",
       "label": "Đăng ký khai sinh",
-      "mean_abs_shap": 3.1132242679595947
-    },
-    {
-      "feature": "n_sdg16_homicides",
-      "label": "Tử vong bạo lực",
-      "mean_abs_shap": 2.061884880065918
+      "mean_abs_shap": 3.166783332824707
     },
     {
       "feature": "n_sdg16_detain",
       "label": "Tạm giam trước xét xử",
-      "mean_abs_shap": 1.9541739225387573
+      "mean_abs_shap": 2.103271484375
+    },
+    {
+      "feature": "n_sdg16_homicides",
+      "label": "Tử vong bạo lực",
+      "mean_abs_shap": 1.980360746383667
     },
     {
       "feature": "n_sdg16_clabor",
       "label": "Lao động trẻ em",
-      "mean_abs_shap": 1.869746446609497
+      "mean_abs_shap": 1.9642786979675293
     },
     {
       "feature": "n_sdg16_justice",
       "label": "Tiếp cận tư pháp",
-      "mean_abs_shap": 1.493712306022644
+      "mean_abs_shap": 1.8418558835983276
     },
     {
       "feature": "n_sdg16_rsf",
       "label": "Tự do báo chí (RSF)",
-      "mean_abs_shap": 1.1531736850738525
+      "mean_abs_shap": 1.2337065935134888
     },
     {
       "feature": "n_sdg16_exprop",
       "label": "Chống tịch thu tài sản",
-      "mean_abs_shap": 1.0047693252563477
+      "mean_abs_shap": 0.9900970458984375
     },
     {
       "feature": "n_sdg16_admin",
       "label": "Hành chính minh bạch",
-      "mean_abs_shap": 0.826991081237793
+      "mean_abs_shap": 0.9424616098403931
     },
     {
       "feature": "n_sdg16_security",
       "label": "An ninh công cộng",
-      "mean_abs_shap": 0.7431818842887878
+      "mean_abs_shap": 0.8139035701751709
     }
   ]
 }

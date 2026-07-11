@@ -438,8 +438,8 @@ onMounted(loadStatus)
             </div>
 
             <div class="method-grid">
-              <article v-for="scenario in finalInsight.forecasts" :key="scenario.scenario">
-                <span>{{ scenario.scenario }}</span>
+              <article v-for="scenario in finalInsight.forecasts" :key="`${scenario.scenario}-${scenario.year}`">
+                <span>{{ scenario.scenario }} · {{ scenario.year }}</span>
                 <h3>{{ scenario.predicted_score.toFixed(2) }}</h3>
                 <p>Δ so với hiện tại: {{ scenario.delta_vs_current > 0 ? '+' : '' }}{{ scenario.delta_vs_current.toFixed(2) }}</p>
               </article>

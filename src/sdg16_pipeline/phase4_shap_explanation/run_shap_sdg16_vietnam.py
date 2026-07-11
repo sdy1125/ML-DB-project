@@ -87,6 +87,75 @@ def rmse(y_true: pd.Series, y_pred: np.ndarray) -> float:
     return float(np.sqrt(mean_squared_error(y_true, y_pred)))
 
 
+def candidate_params() -> list[dict]:
+    """Small deterministic tuning grid for the main XGBoost runner.
+
+    This avoids adding Optuna as a hard dependency while still giving the
+    project a reproducible tuning step before SHAP/export.
+    """
+
+    candidates = [dict(BEST_PARAMS)]
+    for max_depth in [3, 4, 5]:
+        for learning_rate in [0.045, 0.065, 0.09]:
+            for n_estimators in [450, 650, 850]:
+                candidates.append(
+                    {
+                        **BEST_PARAMS,
+                        "max_depth": max_depth,
+                        "learning_rate": learning_rate,
+                        "n_estimators": n_estimators,
+                        "subsample": 0.82,
+                        "colsample_bytree": 0.82,
+                        "reg_alpha": 0.5,
+                        "reg_lambda": 1.0,
+                    }
+                )
+    return candidates
+
+
+def tune_xgboost(train: pd.DataFrame, val: pd.DataFrame) -> tuple[xgb.XGBRegressor, dict, list[dict]]:
+    tuning_rows = []
+    best_model = None
+    best_params = None
+    best_rmse = float("inf")
+
+    for index, params in enumerate(candidate_params(), start=1):
+        model = xgb.XGBRegressor(**params)
+        model.fit(
+            train[FEATURES],
+            train[TARGET],
+            eval_set=[(val[FEATURES], val[TARGET])],
+            verbose=False,
+        )
+        pred = model.predict(val[FEATURES])
+        score = rmse(val[TARGET], pred)
+        row = {
+            "candidate": index,
+            "validation_rmse": score,
+            "validation_r2": float(r2_score(val[TARGET], pred)),
+            **{
+                key: params[key]
+                for key in [
+                    "max_depth",
+                    "learning_rate",
+                    "n_estimators",
+                    "subsample",
+                    "colsample_bytree",
+                    "reg_alpha",
+                    "reg_lambda",
+                ]
+            },
+        }
+        tuning_rows.append(row)
+        if score < best_rmse:
+            best_rmse = score
+            best_model = model
+            best_params = params
+
+    assert best_model is not None and best_params is not None
+    return best_model, best_params, tuning_rows
+
+
 def booster_contribs(model: xgb.XGBRegressor, frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     matrix = xgb.DMatrix(frame, feature_names=FEATURES)
     contribs = model.get_booster().predict(matrix, pred_contribs=True)
@@ -216,12 +285,10 @@ def main() -> None:
     for split in (train, val, test):
         split[FEATURES] = split[FEATURES].fillna(medians)
 
-    model = xgb.XGBRegressor(**BEST_PARAMS)
-    model.fit(
-        train[FEATURES],
-        train[TARGET],
-        eval_set=[(val[FEATURES], val[TARGET])],
-        verbose=False,
+    model, selected_params, tuning_rows = tune_xgboost(train, val)
+    pd.DataFrame(tuning_rows).sort_values("validation_rmse").to_csv(
+        OUTPUT_DIR / "xgboost_tuning_results.csv",
+        index=False,
     )
 
     metrics = {}
@@ -313,6 +380,8 @@ def main() -> None:
         "validation_rows": int(len(val)),
         "test_rows": int(len(test)),
         "base_value": base_value,
+        "selected_params": selected_params,
+        "tuning_candidates": len(tuning_rows),
         "metrics": metrics,
         "vietnam_latest_year": int(years_vn[-1]),
         "vietnam_latest_actual": float(y_vn[-1]),

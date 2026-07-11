@@ -8,6 +8,7 @@ x-app-env: &app-env
   KNOWLEDGE_DIR: /workspace/data/knowledge
   ARTIFACT_DIR: /workspace/artifacts
   MODEL_METADATA_PATH: /workspace/artifacts/linear_regression/metadata.json
+  SUBNATIONAL_DATA_PATH: /workspace/data/subnational/sdg16_provinces.csv
   QDRANT_URL: http://qdrant:6333
   QDRANT_COLLECTION: ${QDRANT_COLLECTION:-sdg16_knowledge}
   EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-disabled}
@@ -31,6 +32,7 @@ services:
     volumes:
       - ./artifacts:/workspace/artifacts:ro
       - ./data/clean:/workspace/data/clean:ro
+      - ./data/subnational:/workspace/data/subnational:ro
       - ./data/knowledge:/workspace/data/knowledge:ro
       - ./configs:/workspace/configs:ro
     depends_on:
