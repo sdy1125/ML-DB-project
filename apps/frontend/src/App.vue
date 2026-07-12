@@ -63,6 +63,9 @@ const finalWeakestMax = computed(() => {
   const values = finalInsight.value?.weakest_indicators?.map((item) => Math.abs(item.contribution)) || []
   return Math.max(...values, 0.001)
 })
+const baseForecasts = computed(() => finalInsight.value?.gru_forecast_baseline || [])
+const leakageTopCorrelations = computed(() => finalInsight.value?.leakage_report?.top_abs_correlations || [])
+const panelTopVif = computed(() => finalInsight.value?.panel_ols_diagnostics?.top_vif || [])
 
 function payload() {
   return {
@@ -84,6 +87,11 @@ function finalContributionWidth(value) {
 
 function displayFeature(key) {
   return indicators.find((item) => item.key === key)?.label || key
+}
+
+function formatNumber(value, digits = 3) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A'
+  return Number(value).toFixed(digits)
 }
 
 async function loadStatus() {
@@ -419,6 +427,46 @@ onMounted(loadStatus)
               </div>
             </div>
 
+            <div class="diagnostic-grid">
+              <article v-if="finalInsight.panel_ols_diagnostics" class="diagnostic-card">
+                <span class="answer-label">PANEL OLS DIAGNOSTICS</span>
+                <div class="metric-pairs">
+                  <p><b>R² overall</b><strong>{{ formatNumber(finalInsight.panel_ols_diagnostics.r2_overall, 4) }}</strong></p>
+                  <p><b>RMSE</b><strong>{{ formatNumber(finalInsight.panel_ols_diagnostics.rmse, 4) }}</strong></p>
+                  <p><b>MAE</b><strong>{{ formatNumber(finalInsight.panel_ols_diagnostics.mae, 4) }}</strong></p>
+                  <p><b>DW mean</b><strong>{{ formatNumber(finalInsight.panel_ols_diagnostics.durbin_watson_panel_mean, 4) }}</strong></p>
+                </div>
+                <small>
+                  Heteroskedasticity flag:
+                  {{ finalInsight.panel_ols_diagnostics.heteroskedasticity_flag ? 'Có cảnh báo' : 'Không bật cờ' }}
+                </small>
+                <div v-if="panelTopVif.length" class="mini-table">
+                  <div v-for="item in panelTopVif" :key="item.feature">
+                    <span>{{ item.feature }}</span>
+                    <strong>{{ formatNumber(item.vif, 2) }}</strong>
+                  </div>
+                </div>
+              </article>
+
+              <article v-if="finalInsight.leakage_report" class="diagnostic-card">
+                <span class="answer-label">XGBOOST LEAKAGE CHECK</span>
+                <div class="status-pill clean">
+                  {{ finalInsight.leakage_report.leakage_status }}
+                </div>
+                <p class="diagnostic-note">
+                  Exact duplicate: {{ finalInsight.leakage_report.exact_duplicate_features?.length || 0 }};
+                  high corr ≥ 0.98:
+                  {{ Object.keys(finalInsight.leakage_report.high_corr_features_abs_ge_0_98 || {}).length }}
+                </p>
+                <div v-if="leakageTopCorrelations.length" class="mini-table">
+                  <div v-for="item in leakageTopCorrelations" :key="item.feature">
+                    <span>{{ item.feature }}</span>
+                    <strong>{{ formatNumber(item.abs_correlation_with_goal16, 3) }}</strong>
+                  </div>
+                </div>
+              </article>
+            </div>
+
             <div class="contribution-header">
               <div>
                 <h4>Chỉ số kéo điểm xuống mạnh nhất</h4>
@@ -443,6 +491,22 @@ onMounted(loadStatus)
                 <h3>{{ scenario.predicted_score.toFixed(2) }}</h3>
                 <p>Δ so với hiện tại: {{ scenario.delta_vs_current > 0 ? '+' : '' }}{{ scenario.delta_vs_current.toFixed(2) }}</p>
               </article>
+            </div>
+
+            <div v-if="baseForecasts.length" class="forecast-card">
+              <div class="contribution-header compact">
+                <div>
+                  <h4>GRU forecast baseline mới</h4>
+                  <p>Recursive forecast dùng trend feature Việt Nam có damping, không còn phẳng.</p>
+                </div>
+              </div>
+              <div class="forecast-strip">
+                <article v-for="row in baseForecasts" :key="row.year">
+                  <span>{{ row.year }}</span>
+                  <strong>{{ formatNumber(row.predicted_goal16, 2) }}</strong>
+                  <small>trend {{ formatNumber(row.feature_trend_norm, 3) }}</small>
+                </article>
+              </div>
             </div>
 
             <div class="answer-box">

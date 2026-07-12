@@ -6,10 +6,11 @@ Mục tiêu của bước thực nghiệm là so sánh hiệu suất của các 
 
 Các mô hình được đưa vào so sánh gồm:
 
-1. Spark Linear Regression.
-2. XGBoost SHAP Runner.
-3. Optional XGBoost Tuned Pipeline.
-4. GRU Sequence Forecaster.
+1. Panel OLS + Fixed Effects.
+2. Spark Linear Regression legacy fallback.
+3. XGBoost SHAP Runner.
+4. Optional XGBoost Tuned Pipeline.
+5. GRU Sequence Forecaster.
 
 Các thước đo đánh giá chính:
 
@@ -41,13 +42,14 @@ Với mô hình GRU, dữ liệu được chuyển thành chuỗi 5 năm liên t
 | XGBoost SHAP Runner | Test | 1.8249 | 1.4019 | 0.9859 |
 | GRU Sequence Forecaster | Test | 2.4411 | 1.9119 | 0.9747 |
 | Optional XGBoost Tuned Pipeline | Overall | 7.7773 | 4.6659 | 0.6974 |
+| Panel OLS + Fixed Effects | Full panel | N/A | N/A | 0.6263 |
 | Spark Linear Regression | Test | 12.2139 | 9.2173 | 0.3509 |
 
 Kết quả cho thấy XGBoost SHAP Runner là mô hình có hiệu suất tốt nhất trong các mô hình được thử nghiệm. Mô hình này đạt RMSE thấp nhất là `1.8249`, MAE là `1.4019` và R² đạt `0.9859`. Điều này cho thấy mô hình giải thích được phần lớn biến thiên của điểm `Goal16` trên tập kiểm tra.
 
 GRU Sequence Forecaster đứng thứ hai với RMSE `2.4411` và R² `0.9747`. Kết quả này cho thấy mô hình chuỗi thời gian có khả năng dự báo khá tốt, nhưng vẫn kém XGBoost trong bài toán hiện tại.
 
-Spark Linear Regression có hiệu suất thấp nhất, với RMSE `12.2139` và R² `0.3509`. Tuy nhiên, mô hình tuyến tính vẫn có vai trò quan trọng như baseline và hỗ trợ reverse-engineer trọng số tuyến tính của các chỉ số.
+Panel OLS + Fixed Effects là baseline kinh tế lượng chính của Phase 1, đạt R² overall `0.6263` khi kiểm soát hiệu ứng cố định theo quốc gia và theo năm. Spark Linear Regression hiện chỉ giữ vai trò legacy fallback metadata cho một số API cũ.
 
 ## 4. Tối ưu hóa XGBoost SHAP Runner
 
@@ -152,7 +154,7 @@ Lý do lựa chọn:
 3. Có thể sinh SHAP contribution để giải thích vì sao điểm của Việt Nam tăng hoặc giảm.
 4. Phù hợp với mục tiêu của đồ án: không chỉ dự đoán điểm, mà còn xác định chỉ số yếu và sinh khuyến nghị chính sách.
 
-GRU được giữ lại như mô hình dự báo chuỗi thời gian bổ trợ. Spark Linear Regression được giữ làm baseline và phục vụ giải thích tuyến tính/reverse-engineering trọng số. Optional XGBoost Tuned Pipeline hiện có hiệu suất thấp hơn XGBoost SHAP Runner, nên chưa được chọn làm mô hình chính.
+GRU được giữ lại như mô hình dự báo chuỗi thời gian bổ trợ. Panel OLS + Fixed Effects được giữ làm baseline kinh tế lượng và phục vụ giải thích tuyến tính/reverse-engineering trọng số. Optional XGBoost Tuned Pipeline hiện có hiệu suất thấp hơn XGBoost SHAP Runner, nên chưa được chọn làm mô hình chính.
 
 ## 8. Ý nghĩa đối với hệ thống RAG + LLM
 
@@ -167,14 +169,53 @@ Kết quả mô hình học máy được dùng như đầu vào định lượn
 Luồng cuối cùng của hệ thống có thể hiểu như sau:
 
 ```text
-SDG16 data
-  -> XGBoost/GRU/Linear
-  -> SHAP + forecast + province drill-down
-  -> RAG retrieval từ tài liệu chính sách
-  -> LLM sinh khuyến nghị cuối cùng
+sdg16.csv / data/clean/sdg16_spark.csv
+  -> Phase 1: Panel OLS + Fixed Effects
+  -> Phase 2: XGBoost dự đoán goal16
+  -> Phase 3: SHAP xác định top chỉ số kéo điểm Việt Nam xuống
+  -> Phase 5: GRU dự báo 2024–2030
+  -> Phase 6: RAG + LLM sinh khuyến nghị chính sách
+  -> Output cuối
+
+SDG16_dataset.csv / data/subnational/sdg16_provinces.csv
+  -> Phase 4: Drill-down map sang PAPI/PCI tỉnh
+  -> Panel FE tỉnh
+  -> Phase 6: RAG + LLM
+  -> Output tỉnh yếu nhất
 ```
 
-## 9. Kết luận
+## 9. Đối chiếu luồng hoạt động với sơ đồ mục tiêu
+
+Sau khi kiểm tra lại project, luồng hiện tại đã khớp với sơ đồ mục tiêu ở mức thực thi.
+
+| Thành phần | Script/Artifact | Trạng thái | Kết quả chính |
+|---|---|---|---|
+| Phase 1 Panel OLS | `python scripts\run_panel_ols.py` | Đã chạy | Entity+Time FE R² overall = `0.6263` |
+| Phase 2 XGBoost | `artifacts/xgboost/metadata.json` | Đã có | Optional XGBoost R² = `0.6974` |
+| Phase 3 SHAP | `artifacts/shap/shap_summary.json` | Đã có | XGBoost SHAP Runner R² = `0.9859` |
+| Phase 4 Drill-down | `python scripts\run_subnational.py` | Đã chạy | Tỉnh yếu nhất: Hải Dương, score = `0.3772` |
+| Panel FE tỉnh | `artifacts/subnational/subnational_results.json` | Đã chạy | estimator = `linearmodels_panel_ols_entity_fe`, nobs = `315` |
+| Phase 5 GRU | `artifacts/gru/vietnam_forecast_2024_2030.csv` | Đã có | Forecast 2024–2030 quanh `63.64` |
+| Phase 6 RAG + LLM | `/insights/final` | Đã nối | Có recommendation fallback/LLM tùy cấu hình |
+
+Kết quả final insight hiện tại:
+
+```text
+model_version  = xgboost_shap_runner+gru_forecast+subnational_drilldown
+source         = shap_gap_analysis_csv+xgboost_shap_summary
+year           = 2023
+current_score  = 64.0963
+observed_score = 63.7269
+top weak       = n_sdg16_rsf, n_sdg16_justice, n_sdg16_exprop
+province       = Hải Dương, score = 0.3772
+forecast_count = 21
+scenarios      = base, optimistic, pessimistic
+forecast_years = 2024–2030
+```
+
+Như vậy, phần output cuối đã có đủ bốn nhóm thông tin trong sơ đồ: điểm Việt Nam hiện tại, chỉ số yếu nhất, tỉnh tệ nhất và dự báo 2030 theo ba kịch bản kèm khuyến nghị chính sách.
+
+## 10. Kết luận
 
 Thực nghiệm cho thấy các mô hình phi tuyến cho hiệu suất vượt trội so với mô hình tuyến tính. XGBoost SHAP Runner là mô hình tốt nhất hiện tại, vừa có độ chính xác cao vừa có khả năng giải thích bằng SHAP. GRU có hiệu suất tốt cho bài toán dự báo chuỗi thời gian nhưng chưa vượt XGBoost trong bài toán dự đoán điểm `Goal16` hiện tại.
 
@@ -193,3 +234,99 @@ Các file kết quả chính:
 - `artifacts/shap/shap_summary.json`
 - `artifacts/gru/gru_summary.json`
 - `artifacts/gru/vietnam_forecast_2024_2030.csv`
+
+## 11. Cập nhật kiểm tra leakage, diagnostics và forecast ngày 2026-07-12
+
+Mục này ghi lại 5 kiểm tra mới nhất theo yêu cầu rà soát luồng SDG16.
+
+### 11.1 Panel OLS quốc gia
+
+Phase 1 hiện dùng `linearmodels.PanelOLS` với country fixed effects và year fixed effects. Artifact chính là `artifacts/panel_ols/panel_ols_results.json`.
+
+Kết quả Entity + Time FE:
+
+| Chỉ tiêu | Giá trị |
+|---|---:|
+| R² overall | 0.6263 |
+| R² within | 0.6297 |
+| RMSE residual | 2.1276 |
+| MAE residual | 1.6099 |
+| Durbin-Watson panel mean | 2.2810 |
+| Corr(|residual|, fitted) | -0.2238 |
+| Heteroskedasticity flag | False |
+
+Kiểm tra đa cộng tuyến cho thấy một số biến có VIF cao, đặc biệt `n_sdg16_homicide` khoảng 29.30 và `n_sdg16_crimepov` khoảng 19.57. Vì vậy Panel OLS nên được xem là baseline kinh tế lượng/diễn giải, không phải model dự đoán chính.
+
+### 11.2 Panel cấp tỉnh đã sửa leakage
+
+Panel FE cấp tỉnh trước đây dùng proxy PAPI/PCI cùng năm để dự đoán `goal16`, dễ gây leakage. Bản mới đã chuyển sang dùng biến trễ t-1:
+
+```text
+papi_score_lag1
+pci_transparency_lag1
+grdp_index_lag1
+```
+
+Kết quả sau khi sửa:
+
+| Chỉ tiêu | Giá trị |
+|---|---:|
+| Estimator | linearmodels_panel_ols_entity_time_fe_lagged |
+| Leakage control | uses_lagged_t_minus_1_features_only |
+| Quan sát sau lag | 252 |
+| Dòng bị loại do lag | 63 |
+| R² overall | 0.0064 |
+
+R² thấp hơn là hợp lý vì mô hình không còn dùng biến cùng năm có khả năng “nhìn trước” mục tiêu.
+
+### 11.3 Breakdown PAPI/PCI cho Đắk Nông
+
+Artifact `artifacts/subnational/subnational_results.json` đã có khóa `dak_nong_breakdown`. Năm mới nhất là 2023.
+
+| Chiều | Giá trị Đắk Nông | Trung bình 63 tỉnh | Chênh lệch | Rank giảm dần |
+|---|---:|---:|---:|---:|
+| bribery_people | 5.4305 | 5.2642 | +0.1663 | 31 |
+| admin_procedure | 3.2251 | 5.7474 | -2.5223 | 52 |
+| vertical_accountability | 8.8367 | 5.7195 | +3.1172 | 9 |
+| transparency | 5.0077 | 5.6081 | -0.6003 | 36 |
+| citizen_participation | 5.6334 | 5.7103 | -0.0770 | 32 |
+| papi_score | 44.3693 | 48.3502 | -3.9809 | 36 |
+| pci_transparency | 67.7885 | 64.3429 | +3.4456 | 22 |
+| grdp_index | 16540.9549 | 30981.9185 | -14440.9636 | 54 |
+| goal16 | 0.7964 | 0.5777 | +0.2186 | 2 |
+
+Điểm yếu nổi bật của Đắk Nông trong dữ liệu demo hiện tại là `admin_procedure`, `transparency`, `papi_score` và `grdp_index`.
+
+### 11.4 GRU forecast đã hết phẳng
+
+GRU forecast trước đây phẳng vì dùng lại vector feature cuối cùng cho mọi năm tương lai. Bản mới dùng recursive forecast với trend feature gần nhất của Việt Nam, damping theo thời gian và clamp theo phân vị 1%–99% của dữ liệu global.
+
+| Năm | predicted_goal16 |
+|---:|---:|
+| 2024 | 63.6456 |
+| 2025 | 63.8785 |
+| 2026 | 64.1630 |
+| 2027 | 64.4077 |
+| 2028 | 64.6922 |
+| 2029 | 64.9520 |
+| 2030 | 65.1743 |
+
+Forecast này vẫn là dự báo mô phỏng theo xu hướng feature, không phải dự báo chính thức của SDSN.
+
+### 11.5 Correlation check cho XGBoost SHAP Runner
+
+XGBoost SHAP Runner đã xuất thêm:
+
+- `artifacts/shap/leakage_correlation_report.csv`
+- `artifacts/shap/shap_summary.json` phần `leakage_correlation_report`
+
+Kết quả kiểm tra:
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Exact duplicate feature với `goal16` | Không có |
+| Feature có `abs(corr) >= 0.98` với `goal16` | Không có |
+| Numeric column đáng ngờ có `abs(corr) >= 0.98` | Không có |
+| Leakage status | no_exact_target_duplicate_detected |
+
+Top tương quan cao nhất với `goal16` là `n_sdg16_cpi` khoảng 0.8206, tiếp theo là `n_sdg16_exprop` khoảng 0.6333 và `n_sdg16_detain` khoảng 0.5780. Đây là tương quan mạnh hợp lý giữa chỉ số thành phần và điểm tổng, chưa phải bằng chứng leakage.

@@ -93,3 +93,6 @@ class FinalInsightResponse(BaseModel):
     evidence: list[SearchHit]
     recommendation: str
     provider: str
+    panel_ols_diagnostics: dict[str, Any] | None = None
+    leakage_report: dict[str, Any] | None = None
+    gru_forecast_baseline: list[dict[str, Any]] = []

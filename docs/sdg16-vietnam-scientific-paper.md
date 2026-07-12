@@ -7,7 +7,7 @@
 
 ## Tóm tắt
 
-Nghiên cứu này đề xuất một khung phân tích kết hợp học máy giải thích được, dự báo chuỗi thời gian và truy xuất tăng cường sinh văn bản nhằm hỗ trợ đánh giá chỉ số SDG16 cho Việt Nam. Dữ liệu nghiên cứu được xây dựng từ bộ SDR2024, gồm 4.392 quan sát của 183 quốc gia với 17 chỉ số đầu vào thuộc nhóm SDG16 và biến mục tiêu là điểm `goal16`. Bốn mô hình được so sánh gồm Spark Linear Regression, XGBoost có giải thích đóng góp biến, XGBoost tinh chỉnh bổ sung và GRU dự báo chuỗi thời gian. Kết quả thực nghiệm cho thấy XGBoost có giải thích đạt hiệu suất tốt nhất trên tập kiểm tra với RMSE = 1,8249, MAE = 1,4019 và R² = 0,9859. Mô hình GRU đạt RMSE = 2,4411 và R² = 0,9747, phù hợp cho dự báo giai đoạn 2024–2030. Phân tích đóng góp biến cho Việt Nam cho thấy trách nhiệm giải trình, tiếp cận tư pháp, bảo vệ quyền tài sản, lao động trẻ em và minh bạch hành chính là các điểm nghẽn chính. Kết quả nghiên cứu cung cấp cơ sở định lượng để kết hợp với RAG và LLM trong sinh khuyến nghị chính sách có căn cứ.
+Nghiên cứu này đề xuất một khung phân tích kết hợp kinh tế lượng panel, học máy giải thích được, dự báo chuỗi thời gian và truy xuất tăng cường sinh văn bản nhằm hỗ trợ đánh giá chỉ số SDG16 cho Việt Nam. Dữ liệu nghiên cứu được xây dựng từ bộ SDR2024, gồm 4.392 quan sát của 183 quốc gia với 17 chỉ số đầu vào thuộc nhóm SDG16 và biến mục tiêu là điểm `goal16`. Các mô hình được so sánh gồm Panel OLS với hiệu ứng cố định, XGBoost có giải thích đóng góp biến, XGBoost tinh chỉnh bổ sung và GRU dự báo chuỗi thời gian. Kết quả thực nghiệm cho thấy XGBoost có giải thích đạt hiệu suất tốt nhất trên tập kiểm tra với RMSE = 1,8249, MAE = 1,4019 và R² = 0,9859. Panel OLS đạt R² overall = 0,6263, đóng vai trò baseline kinh tế lượng. Mô hình GRU đạt RMSE = 2,4411 và R² = 0,9747, phù hợp cho dự báo giai đoạn 2024–2030. Phân tích đóng góp biến cho Việt Nam cho thấy trách nhiệm giải trình, tiếp cận tư pháp, bảo vệ quyền tài sản, lao động trẻ em và minh bạch hành chính là các điểm nghẽn chính.
 
 **Từ khóa:** dự báo SDG16; giải thích mô hình; GRU; khuyến nghị chính sách; RAG; XGBoost.
 
@@ -42,7 +42,7 @@ Các chỉ số đầu vào phản ánh nhiều khía cạnh của SDG16 như ph
 
 ### 2.2. Thiết kế mô hình
 
-Nghiên cứu so sánh bốn nhóm mô hình. Spark Linear Regression được dùng làm mô hình nền nhằm kiểm tra mức độ giải thích tuyến tính của các chỉ số. XGBoost có giải thích đóng góp biến được dùng làm mô hình phi tuyến chính vì có khả năng học quan hệ phức tạp giữa các chỉ số. Một pipeline XGBoost tinh chỉnh bổ sung được dùng để đối chiếu hiệu suất. GRU Sequence Forecaster được dùng cho nhiệm vụ dự báo chuỗi thời gian.
+Nghiên cứu so sánh bốn nhóm mô hình. Panel OLS với hiệu ứng cố định theo quốc gia và theo năm được dùng làm mô hình nền kinh tế lượng nhằm kiểm tra quan hệ tuyến tính có kiểm soát dị biệt quốc gia và cú sốc thời gian. XGBoost có giải thích đóng góp biến được dùng làm mô hình phi tuyến chính vì có khả năng học quan hệ phức tạp giữa các chỉ số. Một pipeline XGBoost tinh chỉnh bổ sung được dùng để đối chiếu hiệu suất. GRU Sequence Forecaster được dùng cho nhiệm vụ dự báo chuỗi thời gian.
 
 Với mô hình XGBoost chính, dữ liệu được chia theo thời gian để hạn chế rò rỉ thông tin: các quan sát đến năm 2018 được dùng để huấn luyện, giai đoạn 2019–2021 dùng để kiểm định và các quan sát từ năm 2022 trở đi dùng để kiểm tra. Với GRU, mỗi mẫu đầu vào gồm chuỗi 5 năm liên tiếp của các chỉ số SDG16, đầu ra là điểm `goal16` của năm kế tiếp.
 
@@ -69,9 +69,10 @@ Kết quả so sánh hiệu suất của bốn mô hình được trình bày �
 | XGBoost SHAP Runner | Test | 1,8249 | 1,4019 | 0,9859 |
 | GRU Sequence Forecaster | Test | 2,4411 | 1,9119 | 0,9747 |
 | Optional XGBoost Tuned Pipeline | Overall | 7,7773 | 4,6659 | 0,6974 |
-| Spark Linear Regression | Test | 12,2139 | 9,2173 | 0,3509 |
+| Panel OLS + Fixed Effects | Full panel | N/A | N/A | 0,6263 |
+| Spark Linear Regression legacy fallback | Test | 12,2139 | 9,2173 | 0,3509 |
 
-Mô hình XGBoost SHAP Runner đạt RMSE = 1,8249, MAE = 1,4019 và R² = 0,9859 trên tập kiểm tra. Mô hình GRU Sequence Forecaster đạt RMSE = 2,4411, MAE = 1,9119 và R² = 0,9747. Optional XGBoost Tuned Pipeline đạt RMSE = 7,7773, MAE = 4,6659 và R² = 0,6974. Spark Linear Regression đạt RMSE = 12,2139, MAE = 9,2173 và R² = 0,3509.
+Mô hình XGBoost SHAP Runner đạt RMSE = 1,8249, MAE = 1,4019 và R² = 0,9859 trên tập kiểm tra. Mô hình GRU Sequence Forecaster đạt RMSE = 2,4411, MAE = 1,9119 và R² = 0,9747. Optional XGBoost Tuned Pipeline đạt RMSE = 7,7773, MAE = 4,6659 và R² = 0,6974. Panel OLS + Fixed Effects đạt R² overall = 0,6263 trên toàn bộ panel, trong khi Spark Linear Regression legacy fallback đạt RMSE = 12,2139, MAE = 9,2173 và R² = 0,3509.
 
 ### 3.2. Cấu hình XGBoost tốt nhất
 
@@ -127,7 +128,7 @@ Nghiên cứu cho thấy XGBoost có giải thích đóng góp biến là mô h�
 
 ## Abstract
 
-This study proposes an explainable machine learning and retrieval-augmented generation framework to support SDG16 performance prediction and policy recommendation for Vietnam. The empirical analysis uses the SDR2024 dataset, including 4,392 observations from 183 countries, 17 normalized SDG16 indicators, and `goal16` as the target variable. Four models are compared: Spark Linear Regression, an explainable XGBoost model, an additional tuned XGBoost pipeline, and a GRU sequence forecaster. The explainable XGBoost model achieves the best test performance, with RMSE = 1.8249, MAE = 1.4019, and R² = 0.9859. The GRU model obtains RMSE = 2.4411 and R² = 0.9747, making it useful for forecasting Vietnam's SDG16 trajectory from 2024 to 2030. Model contribution analysis indicates that press freedom/accountability, access to justice, protection against expropriation, child labor, and administrative transparency are the main negative contributors to Vietnam's predicted SDG16 score. The proposed framework connects these quantitative outputs with a RAG + LLM recommendation layer, enabling evidence-based policy generation from reports, legal documents, and policy texts. The findings demonstrate that combining prediction, explainability, forecasting, and document retrieval can transform SDG16 monitoring from static benchmarking into actionable policy intelligence.
+This study proposes an econometric, explainable machine learning, and retrieval-augmented generation framework to support SDG16 performance prediction and policy recommendation for Vietnam. The empirical analysis uses the SDR2024 dataset, including 4,392 observations from 183 countries, 17 normalized SDG16 indicators, and `goal16` as the target variable. The compared models include Panel OLS with fixed effects, an explainable XGBoost model, an additional tuned XGBoost pipeline, and a GRU sequence forecaster. The explainable XGBoost model achieves the best test performance, with RMSE = 1.8249, MAE = 1.4019, and R² = 0.9859. Panel OLS obtains an overall R² of 0.6263 and serves as the econometric baseline. The GRU model obtains RMSE = 2.4411 and R² = 0.9747, making it useful for forecasting Vietnam's SDG16 trajectory from 2024 to 2030. Model contribution analysis indicates that press freedom/accountability, access to justice, protection against expropriation, child labor, and administrative transparency are the main negative contributors to Vietnam's predicted SDG16 score. The proposed framework connects these quantitative outputs with a RAG + LLM recommendation layer.
 
 **Keywords:** explainable AI; GRU; policy recommendation; RAG; SDG16; XGBoost.
 

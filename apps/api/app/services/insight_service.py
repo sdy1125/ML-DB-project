@@ -120,6 +120,9 @@ class InsightService:
             province=province,
             use_llm=use_llm,
         )
+        panel_ols_diagnostics = self._panel_ols_diagnostics()
+        leakage_report = self._leakage_report()
+        gru_forecast_baseline = self._gru_forecast_baseline(year)
 
         return FinalInsightResponse(
             country=country,
@@ -139,6 +142,9 @@ class InsightService:
             evidence=evidence,
             recommendation=recommendation,
             provider=self.llm_service.provider,
+            panel_ols_diagnostics=panel_ols_diagnostics,
+            leakage_report=leakage_report,
+            gru_forecast_baseline=gru_forecast_baseline,
         )
 
     def _latest_country_features(
@@ -239,6 +245,87 @@ class InsightService:
             return float(payload["vietnam_latest_predicted"])
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return None
+
+    def _panel_ols_diagnostics(self) -> dict | None:
+        path = Path("artifacts") / "panel_ols" / "panel_ols_results.json"
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+
+        both_fe = payload.get("models", {}).get("both_fe", {})
+        diagnostics = payload.get("diagnostics", {}).get("both_fe", {})
+        vif = payload.get("multicollinearity", {}).get("vif", {})
+        top_vif = [
+            {"feature": feature, "vif": round(float(value), 4)}
+            for feature, value in list(vif.items())[:5]
+        ]
+        return {
+            "model_type": payload.get("model_type"),
+            "r2_overall": both_fe.get("r2_overall"),
+            "r2_within": both_fe.get("r2_within"),
+            "rmse": diagnostics.get("rmse"),
+            "mae": diagnostics.get("mae"),
+            "durbin_watson_panel_mean": diagnostics.get("durbin_watson_panel_mean"),
+            "abs_residual_fitted_correlation": diagnostics.get("abs_residual_fitted_correlation"),
+            "heteroskedasticity_flag": diagnostics.get("heteroskedasticity_flag"),
+            "top_vif": top_vif,
+        }
+
+    def _leakage_report(self) -> dict | None:
+        path = Path("artifacts") / "shap" / "shap_summary.json"
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+        report = payload.get("leakage_correlation_report")
+        if not isinstance(report, dict):
+            return None
+        return {
+            "leakage_status": report.get("leakage_status"),
+            "exact_duplicate_features": report.get("exact_duplicate_features", []),
+            "high_corr_features_abs_ge_0_98": report.get("high_corr_features_abs_ge_0_98", {}),
+            "suspicious_numeric_columns_abs_ge_0_98": report.get(
+                "suspicious_numeric_columns_abs_ge_0_98", {}
+            ),
+            "top_abs_correlations": report.get("top_abs_correlations", [])[:5],
+        }
+
+    def _gru_forecast_baseline(self, year: int) -> list[dict]:
+        forecast_path = Path("artifacts") / "gru" / "vietnam_forecast_2024_2030.csv"
+        if not forecast_path.exists():
+            return []
+        rows: list[dict] = []
+        with forecast_path.open("r", encoding="utf-8-sig", newline="") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                try:
+                    forecast_year = int(float(row.get("year", "")))
+                    score = float(row.get("predicted_goal16", ""))
+                except ValueError:
+                    continue
+                if forecast_year <= year:
+                    continue
+                trend_norm = None
+                try:
+                    if row.get("feature_trend_norm") not in {None, ""}:
+                        trend_norm = float(row["feature_trend_norm"])
+                except ValueError:
+                    trend_norm = None
+                rows.append(
+                    {
+                        "year": forecast_year,
+                        "predicted_goal16": round(score, 4),
+                        "feature_trend_norm": round(trend_norm, 6)
+                        if trend_norm is not None
+                        else None,
+                    }
+                )
+        return rows
 
     def _scenario_forecasts(
         self,

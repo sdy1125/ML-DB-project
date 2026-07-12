@@ -226,14 +226,39 @@ def vietnam_forecast(
     vn = df[df["Country"] == "Vietnam"].sort_values("Year").copy()
     vn[FEATURES] = vn[FEATURES].fillna(medians)
     history = vn[FEATURES].tail(SEQUENCE_LENGTH).to_numpy(dtype=np.float32)
-    last_features = history[-1].copy()
+    trend_window = vn.tail(max(SEQUENCE_LENGTH, 6)).copy()
+    year_values = trend_window["Year"].to_numpy(dtype=float)
+    feature_values = trend_window[FEATURES].to_numpy(dtype=float)
+
+    slopes = np.zeros(len(FEATURES), dtype=np.float32)
+    if len(trend_window) >= 3 and np.ptp(year_values) > 0:
+        x_year = year_values - year_values.mean()
+        denom = float(np.sum(x_year**2))
+        if denom:
+            slopes = ((x_year[:, None] * (feature_values - feature_values.mean(axis=0))).sum(axis=0) / denom).astype(np.float32)
+
+    # Keep simulated future indicators within observed global ranges. This
+    # prevents runaway synthetic values while still letting the sequence evolve,
+    # fixing the previous flat forecast caused by reusing the last vector.
+    feature_min = df[FEATURES].quantile(0.01).fillna(medians).to_numpy(dtype=np.float32)
+    feature_max = df[FEATURES].quantile(0.99).fillna(medians).to_numpy(dtype=np.float32)
+
+    current_features = history[-1].copy()
     rows = []
-    for year in years:
+    for step, year in enumerate(years, start=1):
         x_scaled = feature_scaler.transform(history.reshape(-1, history.shape[-1])).reshape(1, SEQUENCE_LENGTH, len(FEATURES)).astype(np.float32)
         pred = float(predict_inverse(model, x_scaled, target_scaler)[0])
-        rows.append({"year": year, "predicted_goal16": round(pred, 4)})
-        # Keep the feature trajectory conservative: reuse latest available indicator vector.
-        history = np.vstack([history[1:], last_features])
+        damping = float(0.85 ** (step - 1))
+        trend_norm = float(np.linalg.norm(slopes * damping))
+        rows.append(
+            {
+                "year": year,
+                "predicted_goal16": round(pred, 4),
+                "feature_trend_norm": round(trend_norm, 6),
+            }
+        )
+        current_features = np.clip(current_features + slopes * damping, feature_min, feature_max)
+        history = np.vstack([history[1:], current_features])
     return rows
 
 
@@ -290,6 +315,7 @@ def main() -> int:
         "source": SOURCE,
         "sequence_length": SEQUENCE_LENGTH,
         "features": FEATURES,
+        "forecast_method": "recursive_gru_with_damped_vietnam_feature_trends",
         "rows": int(len(df)),
         "sequences": int(len(x)),
         "countries": int(len(set(countries))),
@@ -309,4 +335,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

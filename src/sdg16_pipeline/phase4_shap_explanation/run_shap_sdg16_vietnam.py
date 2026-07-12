@@ -156,6 +156,66 @@ def tune_xgboost(train: pd.DataFrame, val: pd.DataFrame) -> tuple[xgb.XGBRegress
     return best_model, best_params, tuning_rows
 
 
+def correlation_leakage_report(df: pd.DataFrame) -> dict:
+    """Check whether XGBoost features look like target leakage.
+
+    The runner deliberately trains only on the predefined component indicators
+    in ``FEATURES``. This report records correlations with the target, exact
+    duplicate checks, and any suspicious high-correlation columns so reviewers
+    can see whether the SHAP model is explaining true component indicators or a
+    leaked copy of ``goal16``.
+    """
+    numeric = df[[TARGET] + FEATURES].apply(pd.to_numeric, errors="coerce")
+    corr = numeric.corr(numeric_only=True)[TARGET].drop(TARGET).sort_values(key=lambda s: s.abs(), ascending=False)
+
+    duplicate_features: list[str] = []
+    for feature in FEATURES:
+        pair = numeric[[TARGET, feature]].dropna()
+        if not pair.empty and float((pair[TARGET] - pair[feature]).abs().max()) < 1e-9:
+            duplicate_features.append(feature)
+
+    numeric_all = df.select_dtypes(include=[np.number]).copy()
+    suspicious_all = {}
+    if TARGET in numeric_all.columns:
+        all_corr = numeric_all.corr(numeric_only=True)[TARGET].drop(TARGET).dropna()
+        suspicious_all = {
+            col: float(value)
+            for col, value in all_corr.sort_values(key=lambda s: s.abs(), ascending=False).items()
+            if abs(float(value)) >= 0.98
+        }
+
+    high_corr_features = {
+        feature: float(value)
+        for feature, value in corr.items()
+        if abs(float(value)) >= 0.98
+    }
+
+    report_rows = pd.DataFrame(
+        {
+            "feature": corr.index,
+            "correlation_with_goal16": corr.values,
+            "abs_correlation_with_goal16": np.abs(corr.values),
+            "exact_duplicate_of_target": [feature in duplicate_features for feature in corr.index],
+            "used_for_training": True,
+        }
+    )
+    report_rows.to_csv(OUTPUT_DIR / "leakage_correlation_report.csv", index=False)
+
+    return {
+        "target": TARGET,
+        "feature_policy": (
+            "Only predefined n_sdg16_* component indicators are used. "
+            "Target, ranking, aggregate and non-feature numeric columns are excluded from training."
+        ),
+        "top_abs_correlations": report_rows.head(10).to_dict("records"),
+        "high_corr_features_abs_ge_0_98": high_corr_features,
+        "exact_duplicate_features": duplicate_features,
+        "suspicious_numeric_columns_abs_ge_0_98": suspicious_all,
+        "leakage_excluded_features": duplicate_features,
+        "leakage_status": "review" if duplicate_features else "no_exact_target_duplicate_detected",
+    }
+
+
 def booster_contribs(model: xgb.XGBRegressor, frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     matrix = xgb.DMatrix(frame, feature_names=FEATURES)
     contribs = model.get_booster().predict(matrix, pred_contribs=True)
@@ -276,6 +336,7 @@ def main() -> None:
     df = pd.read_csv(DATA_PATH)
     df = df[df["source"] == SOURCE].copy()
     df = df.dropna(subset=[TARGET])
+    leakage_report = correlation_leakage_report(df)
 
     train = df[df["Year"] <= 2018].copy()
     val = df[(df["Year"] >= 2019) & (df["Year"] <= 2021)].copy()
@@ -383,6 +444,7 @@ def main() -> None:
         "selected_params": selected_params,
         "tuning_candidates": len(tuning_rows),
         "metrics": metrics,
+        "leakage_correlation_report": leakage_report,
         "vietnam_latest_year": int(years_vn[-1]),
         "vietnam_latest_actual": float(y_vn[-1]),
         "vietnam_latest_predicted": float(pred_vn[-1]),

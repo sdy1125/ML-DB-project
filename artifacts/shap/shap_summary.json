@@ -31,6 +31,87 @@
       "mae": 1.401930452952108
     }
   },
+  "leakage_correlation_report": {
+    "target": "goal16",
+    "feature_policy": "Only predefined n_sdg16_* component indicators are used. Target, ranking, aggregate and non-feature numeric columns are excluded from training.",
+    "top_abs_correlations": [
+      {
+        "feature": "n_sdg16_cpi",
+        "correlation_with_goal16": 0.8205722131023999,
+        "abs_correlation_with_goal16": 0.8205722131023999,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      },
+      {
+        "feature": "n_sdg16_exprop",
+        "correlation_with_goal16": 0.6333074375382077,
+        "abs_correlation_with_goal16": 0.6333074375382077,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      },
+      {
+        "feature": "n_sdg16_detain",
+        "correlation_with_goal16": 0.578041013698824,
+        "abs_correlation_with_goal16": 0.578041013698824,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      },
+      {
+        "feature": "n_sdg16_homicides",
+        "correlation_with_goal16": 0.5298491677936658,
+        "abs_correlation_with_goal16": 0.5298491677936658,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      },
+      {
+        "feature": "n_sdg16_u5reg",
+        "correlation_with_goal16": 0.5250538702672758,
+        "abs_correlation_with_goal16": 0.5250538702672758,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      },
+      {
+        "feature": "n_sdg16_security",
+        "correlation_with_goal16": 0.49992745622647666,
+        "abs_correlation_with_goal16": 0.49992745622647666,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      },
+      {
+        "feature": "n_sdg16_rsf",
+        "correlation_with_goal16": 0.49969687335653734,
+        "abs_correlation_with_goal16": 0.49969687335653734,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      },
+      {
+        "feature": "n_sdg16_admin",
+        "correlation_with_goal16": 0.4890157786021472,
+        "abs_correlation_with_goal16": 0.4890157786021472,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      },
+      {
+        "feature": "n_sdg16_clabor",
+        "correlation_with_goal16": 0.4694169550160486,
+        "abs_correlation_with_goal16": 0.4694169550160486,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      },
+      {
+        "feature": "n_sdg16_weaponsexp",
+        "correlation_with_goal16": -0.38645320052273546,
+        "abs_correlation_with_goal16": 0.38645320052273546,
+        "exact_duplicate_of_target": false,
+        "used_for_training": true
+      }
+    ],
+    "high_corr_features_abs_ge_0_98": {},
+    "exact_duplicate_features": [],
+    "suspicious_numeric_columns_abs_ge_0_98": {},
+    "leakage_excluded_features": [],
+    "leakage_status": "no_exact_target_duplicate_detected"
+  },
   "vietnam_latest_year": 2023,
   "vietnam_latest_actual": 63.7269090909091,
   "vietnam_latest_predicted": 64.09632873535156,

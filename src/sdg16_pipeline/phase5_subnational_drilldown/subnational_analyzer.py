@@ -19,7 +19,6 @@ try:
 except ModuleNotFoundError:  # optional; fallback to statsmodels OLS below.
     PanelOLS = None
     PooledOLS = None
-import statsmodels.api as sm
 import json
 from pathlib import Path
 import logging
@@ -34,7 +33,7 @@ class SubnationalAnalyzer:
         self.data_path = "data/subnational/sdg16_provinces.csv"
         self.mapping = {
             'CPI': 'bribery_people',
-            'Admin': 'administrative_procedure',
+            'Admin': 'admin_procedure',
             'Justice': 'vertical_accountability',
             'Power': 'transparency',
             'Security': 'citizen_participation'
@@ -83,7 +82,7 @@ class SubnationalAnalyzer:
         else:
             # Create from components if PAPI not available
             components = ['citizen_participation', 'transparency', 'vertical_accountability', 
-                         'bribery_people', 'administrative_procedure']
+                         'bribery_people', 'admin_procedure']
             
             # Check which components exist
             existing_components = [col for col in components if col in self.province_data.columns]
@@ -217,57 +216,88 @@ class SubnationalAnalyzer:
         }
     
     def run_panel_regression(self):
-        """Run panel regression on provincial data"""
+        """Run leakage-safe panel regression on provincial data.
+
+        The provincial drill-down predicts current-year ``goal16`` from lagged
+        PAPI/PCI/GRDP features at t-1. This avoids leaking same-year proxy
+        components directly into the target year.
+        """
         logger.info("Running panel regression on provincial data...")
         
         if self.province_data is None:
             self.load_data()
         
-        # Prepare panel data
-        df_panel = self.province_data.set_index(['province', 'year'])
+        df_work = self.province_data.copy().sort_values(["province", "year"])
         
         # Find available features
         feature_options = ['papi_score', 'pci_transparency', 'grdp_index']
-        available_features = [f for f in feature_options if f in df_panel.columns]
+        available_features = [f for f in feature_options if f in df_work.columns]
         
         if not available_features:
             logger.warning("No PAPI/PCI/GRDP columns found, using available numeric columns")
-            numeric_cols = df_panel.select_dtypes(include=[np.number]).columns.tolist()
-            exclude_cols = ['goal16']
+            numeric_cols = df_work.select_dtypes(include=[np.number]).columns.tolist()
+            exclude_cols = ['goal16', 'year']
             available_features = [col for col in numeric_cols if col not in exclude_cols][:3]
         
-        # Features
-        features = available_features[:3]  # Use up to 3 features
-        
         # Target
-        if 'goal16' not in df_panel.columns:
+        if 'goal16' not in df_work.columns:
             logger.warning("goal16 not found, using papi_score as target")
             target = 'papi_score'
         else:
             target = 'goal16'
+
+        base_features = available_features[:3]
+        lag_features = []
+        for feature in base_features:
+            lag_col = f"{feature}_lag1"
+            df_work[lag_col] = df_work.groupby("province")[feature].shift(1)
+            lag_features.append(lag_col)
+
+        rows_before = len(df_work)
+        df_work = df_work.dropna(subset=[target] + lag_features).copy()
+        rows_after = len(df_work)
+
+        # Prepare panel data after lagging
+        df_panel = df_work.set_index(['province', 'year']).sort_index()
         
-        y = df_panel[target]
-        X = df_panel[features]
-        X = sm.add_constant(X)
+        y = df_panel[target].astype(float)
+        X = df_panel[lag_features].astype(float).copy()
+        if 'const' not in X.columns:
+            X.insert(0, 'const', 1.0)
 
         if PanelOLS is None:
-            logger.warning("linearmodels is not installed. Falling back to statsmodels OLS.")
-            results = sm.OLS(y, X).fit()
+            logger.warning("linearmodels is not installed. Falling back to numpy OLS.")
+            beta, *_ = np.linalg.lstsq(X.to_numpy(dtype=float), y.to_numpy(dtype=float), rcond=None)
+            predictions = X.to_numpy(dtype=float) @ beta
+            residuals = y.to_numpy(dtype=float) - predictions
+            sse = float(np.sum(residuals ** 2))
+            sst = float(np.sum((y.to_numpy(dtype=float) - float(y.mean())) ** 2))
+            r2 = 1.0 - sse / sst if sst else 0.0
             return {
-                'r2_within': float(results.rsquared),
-                'r2_between': float(results.rsquared),
-                'r2_overall': float(results.rsquared),
-                'params': {key: float(value) for key, value in results.params.to_dict().items()},
-                'pvalues': {key: float(value) for key, value in results.pvalues.to_dict().items()},
-                'nobs': int(results.nobs),
-                'features_used': features,
+                'r2_within': r2,
+                'r2_between': r2,
+                'r2_overall': r2,
+                'params': {key: float(value) for key, value in zip(X.columns, beta)},
+                'pvalues': {},
+                'nobs': int(len(y)),
+                'base_features': base_features,
+                'features_used': lag_features,
                 'target': target,
-                'estimator': 'statsmodels_ols_fallback',
+                'estimator': 'numpy_ols_fallback',
+                'leakage_control': 'uses_lagged_t_minus_1_features_only',
+                'dropped_rows_due_to_lag': int(rows_before - rows_after),
             }
         
-        # Entity Fixed Effects
-        model = PanelOLS(y, X, entity_effects=True)
-        results = model.fit()
+        # Entity + time fixed effects when possible.
+        model = PanelOLS(
+            y,
+            X,
+            entity_effects=True,
+            time_effects=True,
+            drop_absorbed=True,
+            check_rank=False,
+        )
+        results = model.fit(cov_type='clustered', cluster_entity=True)
         
         logger.info(f"Panel regression complete. R²: {results.rsquared:.3f}")
         
@@ -279,11 +309,78 @@ class SubnationalAnalyzer:
             'params': results.params.to_dict(),
             'pvalues': results.pvalues.to_dict(),
             'nobs': results.nobs,
-            'features_used': features,
-            'target': target
+            'base_features': base_features,
+            'features_used': lag_features,
+            'target': target,
+            'estimator': 'linearmodels_panel_ols_entity_time_fe_lagged',
+            'leakage_control': 'uses_lagged_t_minus_1_features_only',
+            'dropped_rows_due_to_lag': int(rows_before - rows_after),
         }
         
         return results_dict
+
+    def province_dimension_breakdown(self, province_name="Đắk Nông"):
+        """Return latest PAPI/PCI dimension breakdown for one province."""
+        if self.province_data is None:
+            self.load_data()
+
+        df = self.province_data.copy()
+        if "province" not in df.columns or "year" not in df.columns:
+            return {"status": "missing_province_or_year_columns"}
+
+        target_name = province_name.casefold()
+        province_rows = df[df["province"].astype(str).str.casefold() == target_name]
+        if province_rows.empty:
+            # Some Windows-created demo files can contain mojibake. Fall back to
+            # a readable ASCII alias when exact Unicode does not match.
+            province_rows = df[
+                df["province"].astype(str).str.contains("Nông|Nong|NÃ´ng", case=False, regex=True, na=False)
+                & df["province"].astype(str).str.contains("Đắk|Dak|Ä", case=False, regex=True, na=False)
+            ]
+        if province_rows.empty:
+            return {
+                "status": "not_found",
+                "province_requested": province_name,
+                "available_examples": df["province"].dropna().astype(str).head(10).tolist(),
+            }
+
+        latest_year = int(province_rows["year"].max())
+        latest = province_rows[province_rows["year"] == latest_year].iloc[0]
+        latest_all = df[df["year"] == latest_year].copy()
+
+        dimension_cols = [
+            "bribery_people",
+            "admin_procedure",
+            "vertical_accountability",
+            "transparency",
+            "citizen_participation",
+            "papi_score",
+            "pci_transparency",
+            "grdp_index",
+            "goal16",
+        ]
+        available = [col for col in dimension_cols if col in latest_all.columns]
+
+        dimensions = {}
+        for col in available:
+            values = pd.to_numeric(latest_all[col], errors="coerce")
+            current = float(pd.to_numeric(pd.Series([latest[col]]), errors="coerce").iloc[0])
+            national_mean = float(values.mean())
+            rank_desc = int((values > current).sum() + 1)
+            dimensions[col] = {
+                "value": current,
+                "national_mean": national_mean,
+                "delta_vs_mean": current - national_mean,
+                "rank_desc": rank_desc,
+                "province_count": int(values.notna().sum()),
+            }
+
+        return {
+            "status": "ready",
+            "province": str(latest["province"]),
+            "year": latest_year,
+            "dimensions": dimensions,
+        }
     
     def create_heatmap(self, save_path=None):
         """Create heatmap by dimension"""
@@ -297,7 +394,7 @@ class SubnationalAnalyzer:
         latest_data = self.province_data[self.province_data['year'] == latest_year]
         
         # Select dimensions
-        dim_cols = ['bribery_people', 'administrative_procedure', 'vertical_accountability', 
+        dim_cols = ['bribery_people', 'admin_procedure', 'vertical_accountability', 
                    'transparency', 'citizen_participation']
         
         # Filter existing columns
@@ -346,15 +443,16 @@ class SubnationalAnalyzer:
         rankings = self.rank_provinces()
         panel_results = self.run_panel_regression()
         mapping = self.map_sdg_to_papi()
+        dak_nong_breakdown = self.province_dimension_breakdown("Đắk Nông")
         
         # Get top 10 weakest with scores
         weakest_data = []
-        for province in rankings['top_10_weakest']:
+        for rank, province in enumerate(rankings['top_10_weakest'], 1):
             score = rankings['rankings'][province]
             weakest_data.append({
                 'province': province,
                 'score': float(score),
-                'rank': len(rankings['top_10_weakest']) - weakest_data.index(province) if province in weakest_data else 0
+                'rank': rank
             })
         
         results = {
@@ -369,6 +467,7 @@ class SubnationalAnalyzer:
             },
             'panel_regression': panel_results,
             'mapping': mapping,
+            'dak_nong_breakdown': dak_nong_breakdown,
             'top_10_weakest_details': weakest_data
         }
         

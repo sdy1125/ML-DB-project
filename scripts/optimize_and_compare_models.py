@@ -34,8 +34,8 @@ def main() -> int:
     python = sys.executable
 
     run_step(
-        "1) Refresh Phase-1 Linear/Spark baseline comparison metadata",
-        [python, "scripts/evaluate_models.py"],
+        "1) Run Phase-1 Panel OLS + Fixed Effects",
+        [python, "scripts/run_panel_ols.py"],
         required=True,
     )
     run_step(

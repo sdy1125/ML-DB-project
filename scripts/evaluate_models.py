@@ -1,8 +1,8 @@
 """Evaluate and compare available SDG16 model artifacts.
 
-This script is intentionally lightweight: it reads metrics already produced by
-the Spark linear baseline and the XGBoost SHAP runner, then exports one
-comparison table for reporting/tuning decisions.
+This script reads metrics already produced by Phase 1 Panel OLS, the legacy
+linear fallback, the XGBoost SHAP runner, XGBoost ablation and GRU forecaster,
+then exports one comparison table for reporting/tuning decisions.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import Any
 
 OUTPUT_DIR = Path("artifacts/model_comparison")
 LINEAR_METADATA = Path("artifacts/linear_regression/metadata.json")
+PANEL_OLS_RESULTS = Path("artifacts/panel_ols/panel_ols_results.json")
 SHAP_SUMMARY = Path("artifacts/shap/shap_summary.json")
 XGBOOST_METADATA = Path("artifacts/xgboost/metadata.json")
 GRU_SUMMARY = Path("artifacts/gru/gru_summary.json")
@@ -57,8 +58,36 @@ def _row(
     }
 
 
+def _panel_row(payload: dict[str, Any]) -> dict[str, Any]:
+    both_fe = payload.get("models", {}).get("both_fe", {})
+    diagnostics = payload.get("diagnostics", {}).get("both_fe", {})
+    return {
+        "model_name": "Panel OLS + Fixed Effects",
+        "model_type": payload.get("model_type", "panel_ols_fixed_effects"),
+        "evaluation_split": "full_panel",
+        "rmse": round(float(diagnostics["rmse"]), 6)
+        if diagnostics.get("rmse") is not None
+        else None,
+        "mae": round(float(diagnostics["mae"]), 6)
+        if diagnostics.get("mae") is not None
+        else None,
+        "r2": round(float(both_fe["r2_overall"]), 6)
+        if both_fe.get("r2_overall") is not None
+        else None,
+        "artifact_path": str(PANEL_OLS_RESULTS),
+        "notes": (
+            "Official Phase-1 econometric baseline with country and year fixed effects; "
+            "RMSE/MAE are in-sample residual diagnostics for the full panel."
+        ),
+    }
+
+
 def collect_model_rows() -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+
+    panel = _load_json(PANEL_OLS_RESULTS)
+    if panel:
+        rows.append(_panel_row(panel))
 
     linear = _load_json(LINEAR_METADATA)
     if linear:
@@ -68,7 +97,7 @@ def collect_model_rows() -> list[dict[str, Any]]:
                 model_type=linear.get("model_type", "linear_regression"),
                 artifact_path=LINEAR_METADATA,
                 metrics=linear.get("metrics", {}),
-                notes="Baseline/reverse-engineering weights from Spark MLlib.",
+                notes="Legacy online fallback metadata; Phase 1 official baseline is Panel OLS.",
             )
         )
 
@@ -155,7 +184,7 @@ def write_outputs(rows: list[dict[str, Any]], best: dict[str, Any] | None) -> No
 def main() -> int:
     rows = collect_model_rows()
     if not rows:
-        print("No model metrics found. Run the Spark pipeline or SHAP/XGBoost runner first.")
+        print("No model metrics found. Run Panel OLS or SHAP/XGBoost runner first.")
         return 1
 
     best = select_best_model(rows)
