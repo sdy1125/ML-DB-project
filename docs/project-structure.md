@@ -14,7 +14,7 @@ src/sdg16_pipeline/
 │       └── train_linear.py
 ├── phase2_xgboost_ablation/         # reserved: XGBoost, tuning, ablation
 ├── phase3_gru_forecasting/          # reserved: GRU 2025-2030 scenarios
-├── phase4_shap_explanation/         # SHAP-style explanation
+├── phase4_shap_explanation/         # XGBoost tree-contribution explanation
 │   └── run_shap_sdg16_vietnam.py
 ├── phase5_subnational_drilldown/    # reserved: PAPI/PCI province drill-down
 ├── phase6_rag_llm_policy/           # RAG indexing + embeddings
@@ -58,4 +58,3 @@ python -m rag.parse_pdfs
 python -m rag.index_documents
 python -m pipelines.run_pipeline all --config configs\project.yaml
 ```
-

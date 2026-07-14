@@ -458,6 +458,9 @@ onMounted(loadStatus)
                   high corr ≥ 0.98:
                   {{ Object.keys(finalInsight.leakage_report.high_corr_features_abs_ge_0_98 || {}).length }}
                 </p>
+                <p v-if="finalInsight.leakage_report.circular_target_warning" class="diagnostic-note warning">
+                  {{ finalInsight.leakage_report.circular_target_warning }}
+                </p>
                 <div v-if="leakageTopCorrelations.length" class="mini-table">
                   <div v-for="item in leakageTopCorrelations" :key="item.feature">
                     <span>{{ item.feature }}</span>

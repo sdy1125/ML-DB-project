@@ -1,4 +1,9 @@
-"""Generate SHAP-style XGBoost outputs for SDG16 Vietnam.
+"""Generate XGBoost tree-contribution outputs for SDG16 Vietnam.
+
+The target ``goal16`` is a composite score constructed from the SDG16 component
+indicators used as model inputs. This runner is therefore framed as
+composite-score reconstruction and diagnostic decomposition, not as independent
+causal governance prediction.
 
 This runner intentionally avoids the external `shap` package because the project
 environment already has XGBoost installed. XGBoost's Booster can return exact
@@ -20,6 +25,11 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import mean_squared_error, r2_score
+
+try:
+    import shap  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    shap = None
 
 
 DATA_PATH = Path("data/clean/sdg16_spark.csv")
@@ -163,7 +173,9 @@ def correlation_leakage_report(df: pd.DataFrame) -> dict:
     in ``FEATURES``. This report records correlations with the target, exact
     duplicate checks, and any suspicious high-correlation columns so reviewers
     can see whether the SHAP model is explaining true component indicators or a
-    leaked copy of ``goal16``.
+    leaked copy of ``goal16``. It also records the larger methodological caveat:
+    ``goal16`` is itself a composite of SDG16 component indicators, so strong
+    accuracy is reconstruction accuracy rather than independent causal evidence.
     """
     numeric = df[[TARGET] + FEATURES].apply(pd.to_numeric, errors="coerce")
     corr = numeric.corr(numeric_only=True)[TARGET].drop(TARGET).sort_values(key=lambda s: s.abs(), ascending=False)
@@ -205,8 +217,16 @@ def correlation_leakage_report(df: pd.DataFrame) -> dict:
         "target": TARGET,
         "feature_policy": (
             "Only predefined n_sdg16_* component indicators are used. "
-            "Target, ranking, aggregate and non-feature numeric columns are excluded from training."
+            "Target, ranking, aggregate and non-feature numeric columns are excluded from training. "
+            "This removes direct duplicate-target leakage but does not remove the conceptual "
+            "circularity that goal16 is constructed from SDG16 component indicators."
         ),
+        "circular_target_warning": (
+            "goal16 is a composite score constructed from the n_sdg16_* component indicators. "
+            "High XGBoost accuracy should be interpreted as composite-score reconstruction and "
+            "indicator decomposition, not as causal or independent predictive validity."
+        ),
+        "recommended_framing": "composite_score_reconstruction_and_indicator_decomposition",
         "top_abs_correlations": report_rows.head(10).to_dict("records"),
         "high_corr_features_abs_ge_0_98": high_corr_features,
         "exact_duplicate_features": duplicate_features,
@@ -220,6 +240,53 @@ def booster_contribs(model: xgb.XGBRegressor, frame: pd.DataFrame) -> tuple[np.n
     matrix = xgb.DMatrix(frame, feature_names=FEATURES)
     contribs = model.get_booster().predict(matrix, pred_contribs=True)
     return contribs[:, :-1], contribs[:, -1]
+
+
+def tree_contribs(model: xgb.XGBRegressor, frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, str]:
+    """Return tree contributions, preferring the official SHAP package.
+
+    XGBoost's ``pred_contribs=True`` returns Tree SHAP contributions from the
+    booster itself. When the optional ``shap`` package is installed, we use
+    ``shap.TreeExplainer`` explicitly so the paper can state the standard SHAP
+    implementation. The fallback keeps the project runnable in lightweight
+    Docker/local environments.
+    """
+
+    if shap is not None:
+        explainer = shap.TreeExplainer(model)
+        values = explainer.shap_values(frame)
+        base = explainer.expected_value
+        if isinstance(values, list):
+            values = values[0]
+        if isinstance(base, (list, np.ndarray)):
+            base_arr = np.full(len(frame), float(np.asarray(base).ravel()[0]), dtype=float)
+        else:
+            base_arr = np.full(len(frame), float(base), dtype=float)
+        return np.asarray(values, dtype=float), base_arr, "shap_treeexplainer"
+
+    contribs, base = booster_contribs(model, frame)
+    return contribs, base, "xgboost_builtin_tree_contributions_pred_contribs"
+
+
+def add_data_quality_flags(gap: pd.DataFrame) -> pd.DataFrame:
+    """Flag suspicious zero-valued Vietnam indicators before headline ranking."""
+
+    flagged = gap.copy()
+    flagged["data_quality_flag"] = ""
+    flagged["headline_eligible"] = True
+
+    suspicious_zero = (
+        (flagged["vn_2022"].abs() < 1e-12)
+        & (
+            (flagged["top20_mean"].fillna(0) > 10)
+            | (flagged["asean_mean"].fillna(0) > 10)
+        )
+    )
+    flagged.loc[suspicious_zero, "data_quality_flag"] = (
+        "vn_value_zero_with_nonzero_benchmarks_possible_missing_or_imputed"
+    )
+    flagged.loc[suspicious_zero, "headline_eligible"] = False
+    return flagged
 
 
 def plot_bar_global(importance: pd.DataFrame) -> None:
@@ -361,8 +428,8 @@ def main() -> None:
             "mae": float(np.mean(np.abs(split[TARGET] - pred))),
         }
 
-    shap_train, base_train = booster_contribs(model, train[FEATURES])
-    shap_test, _ = booster_contribs(model, test[FEATURES])
+    shap_train, base_train, xai_method = tree_contribs(model, train[FEATURES])
+    shap_test, _, _ = tree_contribs(model, test[FEATURES])
     base_value = float(np.mean(base_train))
 
     vn_df = df[df["Country"] == "Vietnam"].sort_values("Year").copy()
@@ -370,7 +437,7 @@ def main() -> None:
     x_vn = vn_df[FEATURES]
     y_vn = vn_df[TARGET].to_numpy()
     years_vn = vn_df["Year"].to_numpy()
-    shap_vn, _ = booster_contribs(model, x_vn)
+    shap_vn, _, _ = tree_contribs(model, x_vn)
     pred_vn = model.predict(x_vn)
 
     np.save(OUTPUT_DIR / "shap_values_train.npy", shap_train)
@@ -406,8 +473,11 @@ def main() -> None:
     )
     gap["gap_vs_top20"] = gap["top20_mean"] - gap["vn_2022"]
     gap["gap_vs_asean"] = gap["asean_mean"] - gap["vn_2022"]
+    gap = add_data_quality_flags(gap)
     gap = gap.sort_values("shap_vn2022")
     gap.to_csv(OUTPUT_DIR / "gap_analysis.csv", index=False)
+    policy_priority = gap[(gap["headline_eligible"]) & (gap["shap_vn2022"] < 0)].copy()
+    policy_priority.to_csv(OUTPUT_DIR / "policy_priority_indicators.csv", index=False)
     plot_gap(gap)
 
     plot_waterfall(2022, years_vn, x_vn, y_vn, pred_vn, shap_vn, base_value)
@@ -415,7 +485,8 @@ def main() -> None:
     plot_timeline(years_vn, shap_vn, importance)
 
     increments = [5, 10, 15, 20, 30]
-    priority_features = gap.head(5)["feature"].tolist()
+    priority_source = policy_priority if not policy_priority.empty else gap
+    priority_features = priority_source.head(5)["feature"].tolist()
     base_pred = float(pred_vn[idx_2022])
     rows = []
     for feature in priority_features:
@@ -435,6 +506,17 @@ def main() -> None:
 
     summary = {
         "source": SOURCE,
+        "task_framing": "composite_score_reconstruction_not_independent_governance_prediction",
+        "interpretation_warning": (
+            "The target goal16 is constructed from the SDG16 component indicators used as inputs. "
+            "Report the high R2 as reconstruction accuracy and use contributions for diagnostic "
+            "prioritization; do not present them as causal effects."
+        ),
+        "xai_method": xai_method,
+        "xai_method_note": (
+            "Uses shap.TreeExplainer when the optional shap package is installed; "
+            "otherwise falls back to XGBoost pred_contribs, which returns Tree SHAP contributions."
+        ),
         "rows": int(len(df)),
         "countries": int(df["Country"].nunique()),
         "train_rows": int(len(train)),
@@ -448,7 +530,17 @@ def main() -> None:
         "vietnam_latest_year": int(years_vn[-1]),
         "vietnam_latest_actual": float(y_vn[-1]),
         "vietnam_latest_predicted": float(pred_vn[-1]),
+        "data_quality_warning": (
+            "Zero-valued Vietnam indicators with nonzero benchmarks are excluded from headline "
+            "policy priorities and retained only as flagged diagnostic rows."
+        ),
         "top_negative_vn2022": gap.head(5)[["feature", "label", "shap_vn2022"]].to_dict("records"),
+        "headline_policy_priorities_vn2022": policy_priority.head(5)[
+            ["feature", "label", "vn_2022", "shap_vn2022", "data_quality_flag"]
+        ].to_dict("records"),
+        "flagged_zero_value_indicators_vn2022": gap[~gap["headline_eligible"]][
+            ["feature", "label", "vn_2022", "top20_mean", "asean_mean", "shap_vn2022", "data_quality_flag"]
+        ].to_dict("records"),
         "top_global_importance": importance.head(10).to_dict("records"),
     }
     (OUTPUT_DIR / "shap_summary.json").write_text(

@@ -1,5 +1,9 @@
 {
   "source": "SDR2024",
+  "task_framing": "composite_score_reconstruction_not_independent_governance_prediction",
+  "interpretation_warning": "The target goal16 is constructed from the SDG16 component indicators used as inputs. Report the high R2 as reconstruction accuracy and use contributions for diagnostic prioritization; do not present them as causal effects.",
+  "xai_method": "xgboost_builtin_tree_contributions_pred_contribs",
+  "xai_method_note": "Uses shap.TreeExplainer when the optional shap package is installed; otherwise falls back to XGBoost pred_contribs, which returns Tree SHAP contributions.",
   "rows": 4392,
   "countries": 183,
   "train_rows": 3477,
@@ -33,7 +37,9 @@
   },
   "leakage_correlation_report": {
     "target": "goal16",
-    "feature_policy": "Only predefined n_sdg16_* component indicators are used. Target, ranking, aggregate and non-feature numeric columns are excluded from training.",
+    "feature_policy": "Only predefined n_sdg16_* component indicators are used. Target, ranking, aggregate and non-feature numeric columns are excluded from training. This removes direct duplicate-target leakage but does not remove the conceptual circularity that goal16 is constructed from SDG16 component indicators.",
+    "circular_target_warning": "goal16 is a composite score constructed from the n_sdg16_* component indicators. High XGBoost accuracy should be interpreted as composite-score reconstruction and indicator decomposition, not as causal or independent predictive validity.",
+    "recommended_framing": "composite_score_reconstruction_and_indicator_decomposition",
     "top_abs_correlations": [
       {
         "feature": "n_sdg16_cpi",
@@ -115,6 +121,7 @@
   "vietnam_latest_year": 2023,
   "vietnam_latest_actual": 63.7269090909091,
   "vietnam_latest_predicted": 64.09632873535156,
+  "data_quality_warning": "Zero-valued Vietnam indicators with nonzero benchmarks are excluded from headline policy priorities and retained only as flagged diagnostic rows.",
   "top_negative_vn2022": [
     {
       "feature": "n_sdg16_rsf",
@@ -140,6 +147,49 @@
       "feature": "n_sdg16_admin",
       "label": "Hành chính minh bạch",
       "shap_vn2022": -0.3568480312824249
+    }
+  ],
+  "headline_policy_priorities_vn2022": [
+    {
+      "feature": "n_sdg16_justice",
+      "label": "Tiếp cận tư pháp",
+      "vn_2022": 60.769,
+      "shap_vn2022": -1.9228219985961914,
+      "data_quality_flag": ""
+    },
+    {
+      "feature": "n_sdg16_clabor",
+      "label": "Lao động trẻ em",
+      "vn_2022": 82.341,
+      "shap_vn2022": -0.5345646739006042,
+      "data_quality_flag": ""
+    },
+    {
+      "feature": "n_sdg16_admin",
+      "label": "Hành chính minh bạch",
+      "vn_2022": 42.143,
+      "shap_vn2022": -0.3568480312824249,
+      "data_quality_flag": ""
+    }
+  ],
+  "flagged_zero_value_indicators_vn2022": [
+    {
+      "feature": "n_sdg16_rsf",
+      "label": "Tự do báo chí (RSF)",
+      "vn_2022": 0.0,
+      "top20_mean": 82.79785000000001,
+      "asean_mean": 15.433600000000002,
+      "shap_vn2022": -2.3477447032928467,
+      "data_quality_flag": "vn_value_zero_with_nonzero_benchmarks_possible_missing_or_imputed"
+    },
+    {
+      "feature": "n_sdg16_exprop",
+      "label": "Chống tịch thu tài sản",
+      "vn_2022": 0.0,
+      "top20_mean": 77.39999999999999,
+      "asean_mean": 33.12,
+      "shap_vn2022": -1.396231770515442,
+      "data_quality_flag": "vn_value_zero_with_nonzero_benchmarks_possible_missing_or_imputed"
     }
   ],
   "top_global_importance": [

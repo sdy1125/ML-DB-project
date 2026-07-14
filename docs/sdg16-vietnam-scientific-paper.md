@@ -1,145 +1,112 @@
-# ỨNG DỤNG HỌC MÁY GIẢI THÍCH VÀ RAG TRONG DỰ BÁO SDG16 CHO VIỆT NAM
+# Ứng dụng học máy giải thích được và RAG trong phân tích SDG16 cho Việt Nam
 
-**Nguyễn Văn A<sup>1</sup>, Trần Thị B<sup>1</sup>, Lê Văn C<sup>1</sup>**
-
-<sup>1</sup>Khoa/Viện: ........................................................, Trường/Đơn vị: ........................................................  
-**Tác giả liên hệ:** ........................................................; Email: ........................................................
+**Tác giả:** ........................................................  
+**Đơn vị:** ........................................................  
+**Tác giả liên hệ:** ........................................................
 
 ## Tóm tắt
 
-Nghiên cứu này đề xuất một khung phân tích kết hợp kinh tế lượng panel, học máy giải thích được, dự báo chuỗi thời gian và truy xuất tăng cường sinh văn bản nhằm hỗ trợ đánh giá chỉ số SDG16 cho Việt Nam. Dữ liệu nghiên cứu được xây dựng từ bộ SDR2024, gồm 4.392 quan sát của 183 quốc gia với 17 chỉ số đầu vào thuộc nhóm SDG16 và biến mục tiêu là điểm `goal16`. Các mô hình được so sánh gồm Panel OLS với hiệu ứng cố định, XGBoost có giải thích đóng góp biến, XGBoost tinh chỉnh bổ sung và GRU dự báo chuỗi thời gian. Kết quả thực nghiệm cho thấy XGBoost có giải thích đạt hiệu suất tốt nhất trên tập kiểm tra với RMSE = 1,8249, MAE = 1,4019 và R² = 0,9859. Panel OLS đạt R² overall = 0,6263, đóng vai trò baseline kinh tế lượng. Mô hình GRU đạt RMSE = 2,4411 và R² = 0,9747, phù hợp cho dự báo giai đoạn 2024–2030. Phân tích đóng góp biến cho Việt Nam cho thấy trách nhiệm giải trình, tiếp cận tư pháp, bảo vệ quyền tài sản, lao động trẻ em và minh bạch hành chính là các điểm nghẽn chính.
+Nghiên cứu này đề xuất một khung phân tích SDG16 cho Việt Nam kết hợp Panel OLS, XGBoost, giải thích đóng góp chỉ số, GRU và truy xuất tăng cường sinh văn bản. Dữ liệu được xây dựng từ SDR2024, gồm 4.392 quan sát của 183 quốc gia, biến mục tiêu `goal16` và 17 chỉ số thành phần dạng `n_sdg16_*`. Do `goal16` là điểm tổng hợp được xây dựng từ các chỉ số thành phần, XGBoost trong nghiên cứu này được diễn giải là mô hình tái dựng điểm tổng hợp và phân rã đóng góp, không phải mô hình chứng minh nhân quả. Kết quả cho thấy XGBoost SHAP Reconstruction Runner đạt RMSE = 1,8249, MAE = 1,4019 và R2 = 0,9859 trên tập kiểm tra. Panel OLS với hiệu ứng cố định đạt R2 overall = 0,6263, đóng vai trò baseline kinh tế lượng. GRU đạt RMSE = 2,4411 và R2 = 0,9747, đồng thời dự báo điểm Việt Nam tăng từ 63,6456 năm 2024 lên 65,1743 năm 2030. Phân tích đóng góp thô cho thấy RSF và expropriation có đóng góp âm lớn nhưng bị gắn cờ do giá trị Việt Nam bằng 0 trong khi benchmark khác 0; vì vậy headline priorities chỉ gồm tiếp cận tư pháp, lao động trẻ em và minh bạch hành chính. Kết quả định lượng được kết nối với RAG + LLM nhằm sinh khuyến nghị chính sách dựa trên bằng chứng.
 
-**Từ khóa:** dự báo SDG16; giải thích mô hình; GRU; khuyến nghị chính sách; RAG; XGBoost.
+**Từ khóa:** SDG16; XGBoost; Panel OLS; GRU; RAG; khuyến nghị chính sách.
 
 ## 1. Đặt vấn đề
 
-Mục tiêu phát triển bền vững số 16 (SDG16) nhấn mạnh hòa bình, công lý, thể chế hiệu quả, minh bạch, trách nhiệm giải trình và khả năng tiếp cận pháp lý của người dân. Đây là nhóm mục tiêu có vai trò nền tảng vì chất lượng thể chế không chỉ ảnh hưởng đến quản trị công mà còn liên quan đến năng lực cạnh tranh, thu hút đầu tư và phát triển bền vững dài hạn. Tuy nhiên, việc đánh giá SDG16 thường gặp khó khăn do các chỉ số thành phần có bản chất đa chiều, có quan hệ phi tuyến và chịu ảnh hưởng bởi bối cảnh thể chế của từng quốc gia.
+SDG16 nhấn mạnh hòa bình, công lý, thể chế hiệu quả, minh bạch và trách nhiệm giải trình. Tuy nhiên, điểm tổng hợp SDG16 thường chỉ cho biết vị trí tương đối của một quốc gia, chưa chỉ rõ chỉ số nào đang kéo điểm xuống và khuyến nghị chính sách nào có bằng chứng hỗ trợ.
 
-Các phương pháp theo dõi truyền thống thường dừng ở bảng xếp hạng, thống kê mô tả hoặc so sánh điểm số giữa các quốc gia. Cách tiếp cận này hữu ích cho việc nhận diện vị trí tương đối nhưng chưa trả lời đầy đủ các câu hỏi quan trọng trong hoạch định chính sách: chỉ số nào đang kéo điểm quốc gia xuống, điểm số có thể thay đổi như thế nào trong tương lai, và khuyến nghị chính sách nào có bằng chứng hỗ trợ từ tài liệu thực tế. Vì vậy, cần một khung phân tích có khả năng kết hợp dự đoán, giải thích, dự báo và truy xuất bằng chứng.
+Nghiên cứu này xây dựng workflow theo đúng project hiện tại: Panel OLS làm baseline kinh tế lượng, XGBoost tái dựng điểm tổng hợp, contribution analysis xác định chỉ số yếu, GRU dự báo 2024-2030, drill-down cấp tỉnh ánh xạ sang PAPI/PCI và RAG + LLM sinh khuyến nghị chính sách.
 
-Nghiên cứu này hướng đến xây dựng một quy trình phân tích SDG16 cho Việt Nam dựa trên học máy giải thích được và truy xuất tăng cường sinh văn bản. Cụ thể, nghiên cứu so sánh nhiều mô hình dự đoán điểm `goal16`, lựa chọn mô hình có hiệu suất tốt nhất, phân tích các chỉ số ảnh hưởng bất lợi đến Việt Nam, dự báo xu hướng đến năm 2030 và đề xuất cách kết nối kết quả định lượng với hệ thống RAG + LLM để sinh khuyến nghị chính sách. Phần còn lại của bài báo gồm: mục 2 trình bày phương pháp nghiên cứu; mục 3 trình bày kết quả thực nghiệm; mục 4 bàn luận ý nghĩa của kết quả; mục 5 nêu kết luận và hướng phát triển.
+## 2. Phương pháp
 
-## 2. Phương pháp nghiên cứu
-
-### 2.1. Dữ liệu nghiên cứu
-
-Dữ liệu chính được sử dụng trong nghiên cứu là bộ SDR2024 sau khi lọc các quan sát phù hợp cho bài toán SDG16. Bộ dữ liệu gồm 4.392 quan sát thuộc 183 quốc gia. Biến đầu vào là 17 chỉ số đã chuẩn hóa thuộc nhóm `n_sdg16_*`; biến mục tiêu là điểm tổng hợp `goal16`.
-
-**Bảng 1: Mô tả dữ liệu nghiên cứu**
+### 2.1. Dữ liệu
 
 | Thành phần | Mô tả |
 |---|---|
-| Nguồn dữ liệu | SDR2024 |
+| Nguồn | SDR2024 |
 | Số quan sát | 4.392 |
 | Số quốc gia | 183 |
-| Biến đầu vào | 17 chỉ số chuẩn hóa dạng `n_sdg16_*` |
-| Biến mục tiêu | `goal16` |
-| Số quan sát huấn luyện | 3.477 |
-| Số quan sát kiểm định | 549 |
-| Số quan sát kiểm tra | 366 |
+| Input | 17 chỉ số `n_sdg16_*` |
+| Target | `goal16` |
 
-Các chỉ số đầu vào phản ánh nhiều khía cạnh của SDG16 như phòng chống tham nhũng, đăng ký khai sinh, tạm giam trước xét xử, tử vong do bạo lực, lao động trẻ em, tiếp cận tư pháp, minh bạch hành chính và trách nhiệm giải trình.
+### 2.2. Luồng mô hình
 
-### 2.2. Thiết kế mô hình
+```text
+sdg16_spark.csv
+  -> Panel OLS + Fixed Effects
+  -> XGBoost composite-score reconstruction
+  -> XGBoost tree-contribution analysis
+  -> GRU forecast 2024-2030
+  -> RAG + LLM recommendation
 
-Nghiên cứu so sánh bốn nhóm mô hình. Panel OLS với hiệu ứng cố định theo quốc gia và theo năm được dùng làm mô hình nền kinh tế lượng nhằm kiểm tra quan hệ tuyến tính có kiểm soát dị biệt quốc gia và cú sốc thời gian. XGBoost có giải thích đóng góp biến được dùng làm mô hình phi tuyến chính vì có khả năng học quan hệ phức tạp giữa các chỉ số. Một pipeline XGBoost tinh chỉnh bổ sung được dùng để đối chiếu hiệu suất. GRU Sequence Forecaster được dùng cho nhiệm vụ dự báo chuỗi thời gian.
+sdg16_provinces.csv
+  -> Subnational drill-down / Panel FE tỉnh
+  -> RAG + LLM recommendation
+```
 
-Với mô hình XGBoost chính, dữ liệu được chia theo thời gian để hạn chế rò rỉ thông tin: các quan sát đến năm 2018 được dùng để huấn luyện, giai đoạn 2019–2021 dùng để kiểm định và các quan sát từ năm 2022 trở đi dùng để kiểm tra. Với GRU, mỗi mẫu đầu vào gồm chuỗi 5 năm liên tiếp của các chỉ số SDG16, đầu ra là điểm `goal16` của năm kế tiếp.
+### 2.3. Lưu ý phương pháp
 
-### 2.3. Chỉ số đánh giá
-
-Hiệu suất mô hình được đánh giá bằng ba chỉ số hồi quy: RMSE, MAE và R². RMSE phản ánh sai số bình phương trung bình sau khi lấy căn bậc hai; MAE phản ánh sai số tuyệt đối trung bình; R² phản ánh tỷ lệ phương sai của biến mục tiêu được mô hình giải thích. Trong nghiên cứu này, mô hình tốt hơn là mô hình có RMSE và MAE thấp hơn, đồng thời có R² cao hơn.
-
-### 2.4. Giải thích mô hình và tích hợp RAG
-
-Sau khi chọn mô hình tốt nhất, nghiên cứu sử dụng đóng góp biến từ XGBoost để xác định các chỉ số kéo điểm SDG16 của Việt Nam xuống. Các đóng góp âm được xem là tín hiệu ưu tiên chính sách vì chúng làm giảm dự đoán điểm tổng hợp. Kết quả này không được xem là bằng chứng nhân quả tuyệt đối, mà là căn cứ giải thích hành vi của mô hình và định hướng truy xuất tài liệu.
-
-Ở tầng ứng dụng, kết quả học máy được kết hợp với hệ thống RAG + LLM. Hệ thống RAG truy xuất các đoạn tài liệu chính sách, báo cáo quốc tế, văn bản pháp lý và nghiên cứu liên quan. LLM sau đó sử dụng đồng thời kết quả dự đoán, chỉ số yếu, dự báo tương lai và bằng chứng truy xuất để sinh khuyến nghị chính sách.
+Vì `goal16` là điểm tổng hợp từ các biến đầu vào, R2 cao của XGBoost phản ánh khả năng tái dựng công thức/quan hệ tổng hợp của chỉ số, không phản ánh quan hệ nhân quả. Các contribution dùng để ưu tiên phân tích và định hướng khuyến nghị, không thay thế đánh giá chuyên gia.
 
 ## 3. Kết quả
 
-### 3.1. So sánh hiệu suất mô hình
+### 3.1. So sánh mô hình
 
-Kết quả so sánh hiệu suất của bốn mô hình được trình bày ở Bảng 2.
-
-**Bảng 2: So sánh hiệu suất các mô hình dự đoán SDG16**
-
-| Mô hình | Tập đánh giá | RMSE | MAE | R² |
+| Mô hình | Split | RMSE | MAE | R2 |
 |---|---:|---:|---:|---:|
-| XGBoost SHAP Runner | Test | 1,8249 | 1,4019 | 0,9859 |
+| XGBoost SHAP Reconstruction Runner | Test | 1,8249 | 1,4019 | 0,9859 |
+| Panel OLS + Fixed Effects | Full panel | 2,1276 | 1,6099 | 0,6263 |
 | GRU Sequence Forecaster | Test | 2,4411 | 1,9119 | 0,9747 |
 | Optional XGBoost Tuned Pipeline | Overall | 7,7773 | 4,6659 | 0,6974 |
-| Panel OLS + Fixed Effects | Full panel | N/A | N/A | 0,6263 |
-| Spark Linear Regression legacy fallback | Test | 12,2139 | 9,2173 | 0,3509 |
+| Spark Linear Regression | Test | 12,2139 | 9,2173 | 0,3509 |
 
-Mô hình XGBoost SHAP Runner đạt RMSE = 1,8249, MAE = 1,4019 và R² = 0,9859 trên tập kiểm tra. Mô hình GRU Sequence Forecaster đạt RMSE = 2,4411, MAE = 1,9119 và R² = 0,9747. Optional XGBoost Tuned Pipeline đạt RMSE = 7,7773, MAE = 4,6659 và R² = 0,6974. Panel OLS + Fixed Effects đạt R² overall = 0,6263 trên toàn bộ panel, trong khi Spark Linear Regression legacy fallback đạt RMSE = 12,2139, MAE = 9,2173 và R² = 0,3509.
+### 3.2. Raw diagnostic và headline priorities
 
-### 3.2. Cấu hình XGBoost tốt nhất
+Raw diagnostic contribution:
 
-Mô hình XGBoost chính được tinh chỉnh qua 28 cấu hình. Cấu hình được chọn gồm `max_depth = 4`, `learning_rate = 0,09`, `n_estimators = 850`, `subsample = 0,82`, `colsample_bytree = 0,82`, `reg_alpha = 0,5`, `reg_lambda = 1,0`, `tree_method = hist` và `objective = reg:squarederror`. Trên tập kiểm định, mô hình đạt RMSE = 1,1886, MAE = 0,8502 và R² = 0,9937.
+| Chỉ số | Diễn giải | Contribution | Trạng thái dữ liệu |
+|---|---|---:|---|
+| `n_sdg16_rsf` | Tự do báo chí / trách nhiệm giải trình | -2,3477 | Flagged: giá trị VN = 0, benchmark khác 0 |
+| `n_sdg16_justice` | Tiếp cận tư pháp | -1,9228 | Eligible |
+| `n_sdg16_exprop` | Bảo vệ quyền tài sản / chống tịch thu | -1,3962 | Flagged: giá trị VN = 0, benchmark khác 0 |
+| `n_sdg16_clabor` | Lao động trẻ em | -0,5346 | Eligible |
+| `n_sdg16_admin` | Hành chính minh bạch | -0,3568 | Eligible |
 
-### 3.3. Các chỉ số kéo điểm Việt Nam xuống
+Headline policy priorities sau khi loại feature bị flag:
 
-Bảng 3 trình bày năm chỉ số có đóng góp âm lớn nhất đối với dự đoán điểm SDG16 của Việt Nam.
-
-**Bảng 3: Các chỉ số kéo điểm SDG16 của Việt Nam xuống theo đóng góp biến**
-
-| Chỉ số | Diễn giải | Đóng góp |
+| Chỉ số | Diễn giải | Contribution |
 |---|---|---:|
-| `n_sdg16_rsf` | Tự do báo chí / trách nhiệm giải trình | -2,3477 |
 | `n_sdg16_justice` | Tiếp cận tư pháp | -1,9228 |
-| `n_sdg16_exprop` | Bảo vệ quyền tài sản / chống tịch thu tài sản | -1,3962 |
 | `n_sdg16_clabor` | Lao động trẻ em | -0,5346 |
 | `n_sdg16_admin` | Hành chính minh bạch | -0,3568 |
 
-Ngoài ra, ở mức độ quan trọng toàn cục, các chỉ số có đóng góp tuyệt đối trung bình cao gồm `n_sdg16_cpi`, `n_sdg16_u5reg`, `n_sdg16_detain`, `n_sdg16_homicides` và `n_sdg16_clabor`.
+### 3.3. Dự báo GRU cho Việt Nam
 
-### 3.4. Dự báo điểm SDG16 của Việt Nam giai đoạn 2024–2030
-
-Bảng 4 trình bày kết quả dự báo của mô hình GRU cho Việt Nam trong giai đoạn 2024–2030.
-
-**Bảng 4: Dự báo điểm Goal16 của Việt Nam giai đoạn 2024–2030**
-
-| Năm | Điểm Goal16 dự báo |
+| Năm | Predicted Goal16 |
 |---:|---:|
 | 2024 | 63,6456 |
-| 2025 | 63,6389 |
-| 2026 | 63,6521 |
-| 2027 | 63,6432 |
-| 2028 | 63,6419 |
-| 2029 | 63,6419 |
-| 2030 | 63,6419 |
-
-Kết quả dự báo cho thấy điểm `goal16` của Việt Nam trong giai đoạn 2024–2030 dao động quanh mức 63,64 trong điều kiện mô hình học từ xu hướng lịch sử của bộ chỉ số đầu vào.
+| 2025 | 63,8785 |
+| 2026 | 64,1630 |
+| 2027 | 64,4077 |
+| 2028 | 64,6922 |
+| 2029 | 64,9520 |
+| 2030 | 65,1743 |
 
 ## 4. Bàn luận
 
-Kết quả thực nghiệm cho thấy mô hình XGBoost có giải thích đóng góp biến đạt hiệu suất tốt nhất trong nhóm mô hình được so sánh. Điều này phù hợp với đặc điểm của dữ liệu SDG16, vì các chỉ số thể chế thường có quan hệ phi tuyến và có thể tương tác với nhau. Trong khi Linear Regression chỉ mô hình hóa quan hệ tuyến tính, XGBoost có khả năng chia tách không gian dữ liệu theo nhiều ngưỡng khác nhau, nhờ đó nắm bắt tốt hơn sự khác biệt giữa các quốc gia và giữa các giai đoạn.
+XGBoost đạt kết quả tốt nhất vì bài toán hiện tại là tái dựng điểm tổng hợp từ các chỉ số thành phần. Đây là điểm mạnh cho mục tiêu phân rã đóng góp chỉ số, nhưng cũng là giới hạn lớn nếu muốn viết theo hướng dự đoán độc lập hay nhân quả.
 
-Mô hình GRU không vượt XGBoost về sai số dự đoán trên tập kiểm tra, nhưng có vai trò riêng trong bài toán dự báo. Do GRU xử lý chuỗi quan sát theo thời gian, mô hình này phù hợp để ước lượng xu hướng điểm SDG16 trong các năm tiếp theo. Kết quả dự báo cho Việt Nam cho thấy nếu cấu trúc các chỉ số đầu vào không thay đổi đáng kể, điểm SDG16 có thể duy trì quanh mức 63,64 đến năm 2030. Điều này gợi ý rằng cải thiện điểm số cần đến các can thiệp chính sách có mục tiêu, thay vì chỉ kỳ vọng vào xu hướng tự nhiên.
+RSF và expropriation không nên được dùng làm phát hiện nổi bật cho đến khi xác minh lại dữ liệu gốc, vì giá trị Việt Nam bằng 0 trong khi benchmark khác 0. Do đó, khuyến nghị headline nên tập trung vào tiếp cận tư pháp, lao động trẻ em và minh bạch hành chính.
 
-Phân tích đóng góp biến cho thấy các điểm nghẽn chính của Việt Nam nằm ở nhóm trách nhiệm giải trình, tiếp cận tư pháp, bảo vệ quyền tài sản, lao động trẻ em và minh bạch hành chính. Đây đều là những khía cạnh có liên quan trực tiếp đến chất lượng thể chế. Kết quả này có ý nghĩa thực tiễn vì nó chuyển bài toán từ “Việt Nam đạt bao nhiêu điểm” sang “Việt Nam nên ưu tiên cải thiện chỉ số nào”. Khi kết hợp với RAG, các chỉ số yếu này có thể trở thành truy vấn định hướng để tìm kiếm bằng chứng chính sách từ báo cáo, luật, nghị quyết và tài liệu quốc tế.
+Panel OLS vẫn cần được giữ trong bài vì đây là baseline kinh tế lượng chính. GRU đóng vai trò bổ trợ cho dự báo chuỗi thời gian. Subnational drill-down giúp chuyển nhóm chỉ số yếu cấp quốc gia sang proxy PAPI/PCI cấp tỉnh, nhưng kết quả tỉnh cần được xem là lớp hỗ trợ nếu dữ liệu chưa được validate chính thức.
 
-Một điểm mạnh của khung nghiên cứu là sự kết hợp giữa dự đoán và giải thích. Mô hình XGBoost cung cấp độ chính xác cao, trong khi đóng góp biến giúp diễn giải kết quả theo từng chỉ số. GRU bổ sung góc nhìn tương lai, còn RAG + LLM giúp chuyển hóa kết quả định lượng thành khuyến nghị có căn cứ tài liệu. Tuy nhiên, kết quả đóng góp biến không nên được diễn giải như quan hệ nhân quả tuyệt đối. Các chỉ số SDG16 chịu ảnh hưởng bởi phương pháp đo lường, nguồn dữ liệu và bối cảnh quốc gia. Do đó, khuyến nghị chính sách cuối cùng cần kết hợp thêm thẩm định chuyên gia và phân tích định tính.
+RAG + LLM giúp chuyển kết quả mô hình thành khuyến nghị chính sách có dẫn chứng tài liệu. Tuy nhiên, layer này hiện là prototype và chưa có expert validation.
 
 ## 5. Kết luận
 
-Nghiên cứu cho thấy XGBoost có giải thích đóng góp biến là mô hình phù hợp nhất trong thử nghiệm dự đoán SDG16, với RMSE = 1,8249 và R² = 0,9859; đối với Việt Nam, các ưu tiên cải thiện nên tập trung vào trách nhiệm giải trình, tiếp cận tư pháp, bảo vệ quyền tài sản, lao động trẻ em và minh bạch hành chính, đồng thời kết hợp RAG + LLM để sinh khuyến nghị chính sách dựa trên bằng chứng.
+Project hiện tại phù hợp nhất để trình bày như một hệ thống diagnostic policy intelligence cho SDG16. XGBoost tái dựng `goal16` tốt nhất, Panel OLS là baseline kinh tế lượng, GRU cung cấp forecast 2024-2030, drill-down cấp tỉnh hỗ trợ định vị địa phương, và RAG + LLM sinh khuyến nghị dựa trên evidence. Khi viết bài, cần tránh claim nhân quả, cần nêu rõ giới hạn composite-target và không dùng feature bị flag làm headline policy claim.
 
 ## Abstract
 
-This study proposes an econometric, explainable machine learning, and retrieval-augmented generation framework to support SDG16 performance prediction and policy recommendation for Vietnam. The empirical analysis uses the SDR2024 dataset, including 4,392 observations from 183 countries, 17 normalized SDG16 indicators, and `goal16` as the target variable. The compared models include Panel OLS with fixed effects, an explainable XGBoost model, an additional tuned XGBoost pipeline, and a GRU sequence forecaster. The explainable XGBoost model achieves the best test performance, with RMSE = 1.8249, MAE = 1.4019, and R² = 0.9859. Panel OLS obtains an overall R² of 0.6263 and serves as the econometric baseline. The GRU model obtains RMSE = 2.4411 and R² = 0.9747, making it useful for forecasting Vietnam's SDG16 trajectory from 2024 to 2030. Model contribution analysis indicates that press freedom/accountability, access to justice, protection against expropriation, child labor, and administrative transparency are the main negative contributors to Vietnam's predicted SDG16 score. The proposed framework connects these quantitative outputs with a RAG + LLM recommendation layer.
+This study proposes an SDG16 intelligence framework for Vietnam combining Panel OLS, XGBoost composite-score reconstruction, tree-contribution analysis, GRU forecasting, subnational drill-down, and retrieval-augmented generation. Using SDR2024 data with 4,392 observations from 183 countries and 17 SDG16 component indicators, the main XGBoost runner achieves RMSE = 1.8249, MAE = 1.4019, and R2 = 0.9859. Since `goal16` is constructed from the same component indicators, this result is interpreted as composite-score reconstruction rather than causal or independent prediction. GRU forecasts Vietnam's baseline from 63.6456 in 2024 to 65.1743 in 2030. After excluding zero-valued flagged indicators from headline claims, the framework identifies access to justice, child labor, and administrative transparency as key policy-priority contributors for Vietnam and connects these outputs with a RAG + LLM recommendation layer.
 
-**Keywords:** explainable AI; GRU; policy recommendation; RAG; SDG16; XGBoost.
-
-## Tài liệu tham khảo
-
-1. Sachs, J. D., Lafortune, G., Fuller, G., & Drumm, E. (2024). *Sustainable Development Report 2024*. SDSN and Dublin University Press.
-2. Chen, T., & Guestrin, C. (2016). XGBoost: A scalable tree boosting system. *Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining*, 785–794.
-3. Lundberg, S. M., & Lee, S.-I. (2017). A unified approach to interpreting model predictions. *Advances in Neural Information Processing Systems*, 30.
-4. Cho, K., Van Merriënboer, B., Gulcehre, C., Bahdanau, D., Bougares, F., Schwenk, H., & Bengio, Y. (2014). Learning phrase representations using RNN encoder-decoder for statistical machine translation. *Proceedings of EMNLP 2014*, 1724–1734.
-5. Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., et al. (2020). Retrieval-augmented generation for knowledge-intensive NLP tasks. *Advances in Neural Information Processing Systems*, 33, 9459–9474.
-6. World Bank. (2024). *Taking Stock: Vietnam Economic Growth Update*. World Bank.
-7. International Monetary Fund. (2024). *Vietnam: 2024 Article IV Consultation*. IMF Country Report.
-8. United Nations. (2024). *United Nations E-Government Survey 2024*. United Nations.
-9. Government of Vietnam. (2020). *National Digital Transformation Program to 2025, orientation to 2030*. Decision No. 749/QĐ-TTg.
+**Keywords:** SDG16; XGBoost; Panel OLS; GRU; RAG; Vietnam.

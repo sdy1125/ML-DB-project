@@ -105,11 +105,14 @@ def collect_model_rows() -> list[dict[str, Any]]:
     if shap:
         rows.append(
             _row(
-                model_name="XGBoost SHAP Runner",
+                model_name="XGBoost SHAP Reconstruction Runner",
                 model_type="xgboost_regressor_pred_contribs",
                 artifact_path=SHAP_SUMMARY,
                 metrics=shap.get("metrics", {}),
-                notes="Current best candidate; exact tree contributions via XGBoost pred_contribs.",
+                notes=(
+                    "Current best composite-score reconstruction candidate; exact tree contributions "
+                    "via XGBoost pred_contribs. High R2 is not causal or independent predictive evidence."
+                ),
             )
         )
 

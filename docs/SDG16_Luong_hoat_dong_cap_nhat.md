@@ -1,166 +1,53 @@
-# TÀI LIỆU LUỒNG HOẠT ĐỘNG SDG16 INTELLIGENCE PLATFORM
+# Tài liệu luồng hoạt động SDG16 Intelligence Platform
 
-**Phiên bản cập nhật theo luồng project hiện tại**  
-**Mục tiêu:** mô tả đầy đủ luồng dữ liệu, học máy, SHAP, GRU, drill-down cấp tỉnh, RAG, LLM, Web/API và Docker Compose.
+Phiên bản cập nhật theo project hiện tại.
 
----
+## 1. Mục tiêu hệ thống
 
-## Mục lục
+Project xây dựng một pipeline phân tích SDG16 cho Việt Nam, gồm dữ liệu quốc gia, mô hình kinh tế lượng, XGBoost, giải thích đóng góp chỉ số, drill-down cấp tỉnh, dự báo GRU, RAG + LLM và giao diện Web/API.
 
-1. Tổng quan hệ thống  
-2. Cấu trúc phase hiện tại  
-3. Luồng dữ liệu đầu vào  
-4. Phase 1 — Panel OLS + Fixed Effects  
-5. Phase 2 — XGBoost prediction  
-6. Phase 3 — SHAP explainability  
-7. Phase 4 — Drill-down cấp tỉnh  
-8. Phase 5 — GRU forecasting 2024–2030  
-9. Phase 6 — RAG + LLM policy recommendation  
-10. Final Insight API  
-11. Luồng Web/API serving  
-12. Docker Compose và cách chạy  
-13. Artifact đầu ra quan trọng  
-14. Checklist kiểm tra luồng hoàn chỉnh
+Điểm cần ghi đúng trong báo cáo: XGBoost hiện không nên được mô tả là mô hình “dự đoán độc lập” hay “chứng minh nhân quả”. Vì `goal16` là điểm tổng hợp được xây dựng từ các chỉ số `n_sdg16_*`, XGBoost đang làm nhiệm vụ tái dựng điểm tổng hợp và phân rã đóng góp chỉ số.
 
----
-
-## 1. Tổng quan hệ thống
-
-SDG16 Intelligence Platform là hệ thống phân tích chỉ số SDG16 nhằm hỗ trợ đánh giá năng lực thể chế, dự báo xu hướng và sinh khuyến nghị chính sách cho Việt Nam. Project hiện được tổ chức theo hai nhóm luồng chính:
-
-- **Offline / Batch pipeline:** chuẩn bị dữ liệu, huấn luyện mô hình, sinh artifact, tạo SHAP, dự báo GRU, phân tích tỉnh và index tài liệu RAG.
-- **Online / Serving pipeline:** giao diện Vue gửi request qua Nginx/Spring Boot/FastAPI; FastAPI đọc artifact đã sinh để trả về điểm hiện tại, chỉ số yếu nhất, tỉnh yếu nhất, dự báo 2030 và khuyến nghị chính sách.
-
-Luồng cập nhật hiện tại đã khớp với sơ đồ mục tiêu:
+## 2. Luồng tổng thể đúng với code
 
 ```text
-SDG16 country data
-  -> Phase 1 Panel OLS + Fixed Effects
-  -> Phase 2 XGBoost prediction
-  -> Phase 3 SHAP: top weak indicators
-  -> Phase 5 GRU forecast 2024–2030
-  -> Phase 6 RAG + LLM
+data/clean/sdg16_spark.csv
+  -> Phase 1: Panel OLS + Fixed Effects
+  -> Phase 2: XGBoost composite-score reconstruction
+  -> Phase 3: XGBoost tree-contribution explanation
+  -> Phase 5: GRU forecast 2024-2030
+  -> Phase 6: RAG + LLM policy recommendation
   -> Final output
 
-SDG16 provincial data
-  -> Phase 4 Drill-down / Panel tỉnh
-  -> Phase 6 RAG + LLM
+data/subnational/sdg16_provinces.csv
+  -> Phase 4: Subnational drill-down / province Panel FE
+  -> Phase 6: RAG + LLM policy recommendation
   -> Final output
 ```
 
 Output cuối cùng gồm:
 
 - Điểm Việt Nam hiện tại.
-- Chỉ số yếu nhất kéo điểm xuống.
-- Tỉnh yếu nhất theo dữ liệu cấp tỉnh.
-- Dự báo 2024–2030 theo ba kịch bản.
-- Khuyến nghị chính sách có evidence RAG.
+- Các chỉ số kéo điểm Việt Nam xuống.
+- Tỉnh yếu nhất theo dữ liệu cấp tỉnh hiện có.
+- Dự báo 2024-2030.
+- Khuyến nghị chính sách có evidence từ RAG.
 
----
+## 3. Entrypoint chính
 
-## 2. Cấu trúc phase hiện tại
-
-```text
-src/sdg16_pipeline/
-├── data_ingestion/
-│   └── pdf_ingestion.py
-├── phase1_panel_ols/
-│   ├── run_pipeline.py
-│   └── spark_jobs/
-│       ├── prepare_data.py
-│       └── train_linear.py
-├── phase2_xgboost_ablation/
-│   └── xgboost_pipeline.py
-├── phase3_gru_forecasting/
-│   └── gru_forecast.py
-├── phase4_shap_explanation/
-│   ├── shap_analyzer.py
-│   └── run_shap_sdg16_vietnam.py
-├── phase5_subnational_drilldown/
-│   └── subnational_analyzer.py
-├── phase6_rag_llm_policy/
-│   ├── embeddings.py
-│   └── index_documents.py
-└── final_output/
-    └── generate_figures.py
-```
-
-Các wrapper/script chính:
-
-```text
-scripts/optimize_and_compare_models.py   # chạy tổng model + comparison
-scripts/run_shap_sdg16_vietnam.py        # chạy XGBoost + SHAP cho Việt Nam
-scripts/run_gru_forecast.py              # chạy GRU forecast 2024–2030
-scripts/train_xgboost.py                 # chạy optional XGBoost phase 2
-scripts/run_subnational.py               # chạy drill-down cấp tỉnh
-scripts/evaluate_models.py               # in bảng so sánh model
-```
-
----
-
-## 3. Luồng dữ liệu đầu vào
-
-Project hiện dùng hai nhóm dữ liệu chính:
-
-### 3.1. Dữ liệu quốc gia
-
-```text
-data/clean/sdg16_spark.csv
-```
-
-Vai trò:
-
-- Là nguồn chính cho XGBoost, SHAP, GRU và final insight.
-- Gồm dữ liệu SDR2024 đã làm sạch.
-- Có các cột `country`, `year`, `goal16` và các feature dạng `n_sdg16_*`.
-
-Artifact liên quan:
-
-```text
-artifacts/panel_ols/panel_ols_results.json
-artifacts/linear_regression/metadata.json
-artifacts/shap/shap_summary.json
-artifacts/shap/gap_analysis.csv
-artifacts/gru/vietnam_forecast_2024_2030.csv
-```
-
-### 3.2. Dữ liệu cấp tỉnh
-
-```text
-data/subnational/sdg16_provinces.csv
-```
-
-Vai trò:
-
-- Đại diện cho dữ liệu drill-down cấp tỉnh.
-- Có các cột như `province`, `year`, `goal16`, `papi_score`, `pci_transparency`, `grdp_index`.
-- Được dùng để xác định tỉnh yếu nhất và các chiều PAPI/PCI liên quan.
-
-Artifact liên quan:
-
-```text
-artifacts/subnational/subnational_results.json
-figures/provincial_heatmap.png
-```
-
-### 3.3. Dữ liệu tri thức RAG
-
-```text
-data/knowledge/text/
-data/knowledge/processed/chunks.jsonl
-```
-
-Vai trò:
-
-- Chứa tài liệu PDF đã parse thành text/chunk.
-- Chia thành 5 nhóm tri thức: IMD/WEF, Vietnam country reports, case studies, academic papers, Vietnam policies.
-- Được dùng cho search evidence và sinh khuyến nghị chính sách.
-
----
+| Mục đích | File chạy |
+|---|---|
+| Chạy toàn bộ pipeline model + so sánh | `python scripts\optimize_and_compare_models.py` |
+| Phase 1 Panel OLS | `python scripts\run_panel_ols.py` |
+| Phase 2 optional XGBoost | `python scripts\train_xgboost.py` |
+| Phase 3 XGBoost reconstruction + contribution | `python scripts\run_shap_sdg16_vietnam.py` |
+| Phase 4 drill-down cấp tỉnh | `python scripts\run_subnational.py` |
+| Phase 5 GRU forecast | `python scripts\run_gru_forecast.py` |
+| Tổng hợp bảng so sánh model | `python scripts\evaluate_models.py` |
 
 ## 4. Phase 1 — Panel OLS + Fixed Effects
 
-Phase 1 chính thức của project hiện tại là **Panel OLS + Fixed Effects**. Mô hình này học quan hệ giữa điểm `goal16` và các chỉ số `n_sdg16_*` trên dữ liệu panel quốc gia - năm, đồng thời kiểm soát hiệu ứng cố định theo quốc gia và theo năm.
+Phase 1 chính thức là Panel OLS + Fixed Effects, dùng `linearmodels.PanelOLS`.
 
 Entrypoint:
 
@@ -168,64 +55,48 @@ Entrypoint:
 python scripts\run_panel_ols.py
 ```
 
+Input:
+
+```text
+data/clean/sdg16_spark.csv
+```
+
 Mô hình:
 
 ```text
-Goal16_it = alpha + beta * SDG16_indicators_it + country_FE_i + year_FE_t + error_it
+goal16_it = alpha + beta * sdg16_indicators_it + country_FE_i + year_FE_t + error_it
 ```
 
-Output chính:
+Artifact:
 
 ```text
 artifacts/panel_ols/panel_ols_results.json
 ```
 
-Artifact Panel OLS gồm:
-
-- `model_type = panel_ols_fixed_effects`
-- `formula`
-- `features`
-- `models.entity_fe`
-- `models.both_fe`
-- `models.pooled`
-- `comparison`
-- `significant_factors_p05`
-
 Kết quả hiện tại:
 
-```text
-Entity + Time FE R² within  = 0.6297
-Entity + Time FE R² overall = 0.6263
-Pooled OLS R² overall       = 0.7122
-Số feature SDG16            = 17
-```
+| Chỉ số | Giá trị |
+|---|---:|
+| RMSE | 2.1276 |
+| MAE | 1.6099 |
+| R2 overall | 0.6263 |
 
-Vai trò hiện tại:
+Vai trò:
 
-- Là baseline kinh tế lượng chính của Phase 1.
-- Học trọng số/quan hệ tuyến tính có kiểm soát country FE và year FE.
-- Là cơ sở để so sánh với XGBoost/GRU và giải thích định lượng trong paper.
-- Không phải nguồn chính cho `current_score` của final insight; final insight ưu tiên XGBoost/SHAP.
+- Baseline kinh tế lượng chính.
+- Có kiểm soát country fixed effects và year fixed effects.
+- Có diagnostics như RMSE, MAE, Durbin-Watson, VIF.
+- Không phải nguồn chính của `current_score` trong Final Insight; Final Insight ưu tiên artifact XGBoost/contribution.
 
-Legacy artifact vẫn còn:
-
-```text
-artifacts/linear_regression/metadata.json
-```
-
-File này được giữ lại như fallback online cũ nếu thiếu SHAP/XGBoost artifact, không còn là Phase 1 chính.
-
----
-
-## 5. Phase 2 — XGBoost prediction
+## 5. Phase 2 — XGBoost composite-score reconstruction
 
 Entrypoint:
 
 ```powershell
-python scripts/train_xgboost.py
+python scripts\train_xgboost.py
 ```
 
-Nguồn dữ liệu:
+Input:
 
 ```text
 data/clean/sdg16_spark.csv
@@ -233,9 +104,9 @@ data/clean/sdg16_spark.csv
 
 Vai trò:
 
-- Dự đoán điểm `goal16`.
-- Là mô hình phi tuyến để so sánh với Linear Regression.
-- Có pipeline optional để tuning và ablation.
+- Tái dựng/ước lượng điểm tổng hợp `goal16` từ các chỉ số thành phần `n_sdg16_*`.
+- Là mô hình phi tuyến để so sánh với Panel OLS.
+- Có pipeline optional để tuning/ablation.
 
 Artifact:
 
@@ -245,58 +116,61 @@ artifacts/xgboost/xgboost_model.pkl
 artifacts/xgboost/scaler.pkl
 ```
 
-Kết quả so sánh hiện tại:
+Kết quả optional XGBoost hiện tại:
 
-```text
-Optional XGBoost Tuned Pipeline:
-RMSE = 7.7773
-MAE  = 4.6659
-R²   = 0.6974
-```
+| Chỉ số | Giá trị |
+|---|---:|
+| RMSE | 7.7773 |
+| MAE | 4.6659 |
+| R2 | 0.6974 |
 
-Trong project hiện tại, mô hình XGBoost tốt nhất cho output cuối nằm ở runner SHAP/XGBoost của Phase 3.
+Lưu ý: Phase 2 này là optional XGBoost pipeline. XGBoost đang chạy chính cho output cuối là runner ở Phase 3.
 
----
+## 6. Phase 3 — XGBoost tree-contribution explanation
 
-## 6. Phase 3 — SHAP explainability
-
-Entrypoint:
+Entrypoint chính:
 
 ```powershell
-python scripts/run_shap_sdg16_vietnam.py
+python scripts\run_shap_sdg16_vietnam.py
+```
+
+File xử lý chính:
+
+```text
+src/sdg16_pipeline/phase4_shap_explanation/run_shap_sdg16_vietnam.py
 ```
 
 Vai trò:
 
-- Huấn luyện/tune XGBoost tốt nhất cho SDG16.
-- Sinh SHAP-style contribution bằng XGBoost `pred_contribs`.
-- Xác định top chỉ số kéo điểm Việt Nam xuống.
-- Tạo artifact chính cho final insight.
+- Tune/train XGBoost chính.
+- Dùng XGBoost `pred_contribs=True` để sinh tree contribution.
+- Xuất top chỉ số kéo điểm Việt Nam xuống.
+- Xuất leakage/correlation report.
+- Là nguồn artifact chính cho Final Insight.
 
-Artifact chính:
+Artifact:
 
 ```text
 artifacts/shap/shap_summary.json
 artifacts/shap/gap_analysis.csv
 artifacts/shap/global_shap_importance.csv
-artifacts/shap/xgboost_tuning_results.csv
+artifacts/shap/leakage_correlation_report.csv
 ```
 
-Kết quả model hiện tại:
+Kết quả hiện tại:
 
-```text
-XGBoost SHAP Runner:
-RMSE = 1.8249
-MAE  = 1.4019
-R²   = 0.9859
-```
+| Chỉ số | Giá trị |
+|---|---:|
+| RMSE | 1.8249 |
+| MAE | 1.4019 |
+| R2 | 0.9859 |
 
-Điểm Việt Nam hiện tại theo XGBoost/SHAP:
+Cách diễn giải đúng:
 
-```text
-Observed score 2023  = 63.7269
-Predicted score 2023 = 64.0963
-```
+- Đây là hiệu suất tái dựng điểm tổng hợp `goal16`.
+- Không được viết là bằng chứng nhân quả.
+- Không được viết là dự đoán độc lập về chất lượng quản trị.
+- Contribution dùng để ưu tiên chỉ số cần chú ý, không phải tác động chính sách chắc chắn.
 
 Top chỉ số kéo điểm Việt Nam xuống:
 
@@ -304,28 +178,19 @@ Top chỉ số kéo điểm Việt Nam xuống:
 |---|---|---:|
 | `n_sdg16_rsf` | Tự do báo chí / trách nhiệm giải trình | -2.3477 |
 | `n_sdg16_justice` | Tiếp cận tư pháp | -1.9228 |
-| `n_sdg16_exprop` | Bảo vệ quyền tài sản / chống tịch thu tài sản | -1.3962 |
+| `n_sdg16_exprop` | Bảo vệ quyền tài sản / chống tịch thu | -1.3962 |
 | `n_sdg16_clabor` | Lao động trẻ em | -0.5346 |
 | `n_sdg16_admin` | Hành chính minh bạch | -0.3568 |
-
-Trong final insight hiện tại:
-
-```text
-explainability_source = shap_gap_analysis_csv+xgboost_shap_summary
-model_version = xgboost_shap_runner+gru_forecast+subnational_drilldown
-```
-
----
 
 ## 7. Phase 4 — Drill-down cấp tỉnh
 
 Entrypoint:
 
 ```powershell
-python scripts/run_subnational.py
+python scripts\run_subnational.py
 ```
 
-Nguồn dữ liệu:
+Input:
 
 ```text
 data/subnational/sdg16_provinces.csv
@@ -333,67 +198,40 @@ data/subnational/sdg16_provinces.csv
 
 Vai trò:
 
-- Map các chỉ số yếu cấp quốc gia sang chiều PAPI/PCI cấp tỉnh.
+- Map chỉ số yếu cấp quốc gia sang proxy PAPI/PCI cấp tỉnh.
 - Tính ranking tỉnh theo `goal16`.
-- Chạy phân tích Panel FE cấp tỉnh bằng `linearmodels.PanelOLS`.
-- Xuất heatmap và kết quả drill-down.
+- Chạy Panel FE cấp tỉnh.
+- Trả về tỉnh yếu nhất cho Final Insight.
 
 Artifact:
 
 ```text
 artifacts/subnational/subnational_results.json
-figures/provincial_heatmap.png
 ```
 
-Mapping hiện tại:
-
-| SDG16 feature | Cột cấp tỉnh |
-|---|---|
-| `n_sdg16_cpi` | `bribery_people` |
-| `n_sdg16_admin` | `admin_procedure` |
-| `n_sdg16_justice` | `vertical_accountability` |
-| `n_sdg16_power` | `transparency` |
-| `n_sdg16_security` | `citizen_participation` |
-
-Kết quả serving hiện tại:
+Leakage đã được giảm bằng cách dùng biến trễ:
 
 ```text
-province.data_status = ready
-weakest_province     = Hải Dương
-weakest_score        = 0.3772
+papi_score_lag1
+pci_transparency_lag1
+grdp_index_lag1
 ```
 
-Kết quả Panel FE tỉnh hiện tại:
+Kết quả Panel FE tỉnh hiện tại có R2 thấp, nên chỉ nên dùng như lớp drill-down hỗ trợ, không nên xem là ranking chính thức nếu chưa validate dữ liệu PAPI/PCI.
 
-```text
-estimator  = linearmodels_panel_ols_entity_fe
-nobs       = 315
-R² overall = 0.0032
-```
-
-Nghĩa là hệ thống hiện đã có thể trả lời phần “tỉnh nào tệ nhất” trong output cuối, đồng thời có phân tích Panel FE tỉnh để phục vụ nhánh drill-down trong sơ đồ.
-
----
-
-## 8. Phase 5 — GRU forecasting 2024–2030
+## 8. Phase 5 — GRU forecasting 2024-2030
 
 Entrypoint:
 
 ```powershell
-python scripts/run_gru_forecast.py
+python scripts\run_gru_forecast.py
 ```
 
-Nguồn dữ liệu:
+Input:
 
 ```text
 data/clean/sdg16_spark.csv
 ```
-
-Vai trò:
-
-- Dự báo `goal16` theo chuỗi thời gian.
-- Dùng sequence length = 5 năm.
-- Sinh forecast cho Việt Nam giai đoạn 2024–2030.
 
 Artifact:
 
@@ -405,374 +243,94 @@ artifacts/gru/gru_model_state.pt
 
 Kết quả model:
 
-```text
-GRU Sequence Forecaster:
-RMSE = 2.4411
-MAE  = 1.9119
-R²   = 0.9747
-```
+| Chỉ số | Giá trị |
+|---|---:|
+| RMSE | 2.4411 |
+| MAE | 1.9119 |
+| R2 | 0.9747 |
 
-Dự báo baseline cho Việt Nam:
+Dự báo baseline Việt Nam hiện tại:
 
 | Năm | Predicted Goal16 |
 |---:|---:|
 | 2024 | 63.6456 |
-| 2025 | 63.6389 |
-| 2026 | 63.6521 |
-| 2027 | 63.6432 |
-| 2028 | 63.6419 |
-| 2029 | 63.6419 |
-| 2030 | 63.6419 |
+| 2025 | 63.8785 |
+| 2026 | 64.1630 |
+| 2027 | 64.4077 |
+| 2028 | 64.6922 |
+| 2029 | 64.9520 |
+| 2030 | 65.1743 |
 
-Trong final insight, hệ thống tạo thêm 3 kịch bản:
-
-```text
-pessimistic
-base
-optimistic
-```
-
-Tổng số forecast trả về:
-
-```text
-3 kịch bản × 7 năm = 21 dòng forecast
-```
-
----
+Điểm cần sửa trong báo cáo: không viết forecast “phẳng quanh 63.64” nữa. Artifact hiện tại cho thấy baseline tăng nhẹ đến 65.1743 năm 2030.
 
 ## 9. Phase 6 — RAG + LLM policy recommendation
 
-Luồng RAG gồm hai phần:
-
-### 9.1. Offline parse/index
-
-Parse PDF:
-
-```powershell
-docker compose --profile jobs run --rm pdf-parser
-```
-
-Index documents:
-
-```powershell
-docker compose --profile jobs run --rm rag-indexer
-```
-
-Nguồn text/chunk:
+Luồng RAG gồm:
 
 ```text
 data/knowledge/text/
-data/knowledge/processed/chunks.jsonl
+  -> chunking / indexing
+  -> retrieval evidence
+  -> LLM recommendation
 ```
 
-### 9.2. Online recommendation
+Provider LLM hiện có thể cấu hình qua `.env`, ví dụ Ollama hoặc Gemini qua openai-compatible endpoint. Báo cáo không nên ghi cứng GPT-4/Claude nếu code không cố định model đó.
 
-Final insight sẽ tạo query từ:
+Final Insight dùng:
 
-- Quốc gia.
-- Top chỉ số yếu từ SHAP.
-- Nhóm policy keyword: governance, justice, anti-corruption, digital government.
+- current score từ XGBoost/contribution artifact.
+- weakest indicators từ `gap_analysis.csv`.
+- GRU forecast baseline.
+- province insight từ subnational artifact.
+- evidence từ RAG.
+- LLM để viết khuyến nghị cuối.
 
-Sau đó:
+## 10. Web/API serving
 
-```text
-RAG search -> evidence -> LLM prompt -> recommendation
-```
-
-LLM provider hỗ trợ:
-
-```text
-disabled
-openai
-openai-compatible
-ollama
-```
-
-Khi `LLM_PROVIDER=disabled`, hệ thống trả fallback recommendation, không gọi model ngoài.
-
----
-
-## 10. Final Insight API
-
-Endpoint chính:
-
-```http
-GET /insights/final?country=Vietnam&use_llm=true
-```
-
-Qua Spring Boot:
-
-```http
-GET /api/v1/insights/final?country=Vietnam&useLlm=true
-```
-
-Output schema chính:
-
-```text
-country
-year
-current_score
-observed_score
-model_version
-explainability_source
-weakest_indicators
-strongest_indicators
-forecasts
-province
-evidence
-recommendation
-provider
-```
-
-Luồng xử lý hiện tại:
-
-```text
-1. Đọc feature mới nhất của Việt Nam từ data/clean/sdg16_spark.csv.
-2. Chạy ModelService linear để có fallback.
-3. Nếu có artifacts/shap/shap_summary.json:
-   - dùng predicted score từ XGBoost/SHAP làm current_score.
-4. Nếu có artifacts/shap/gap_analysis.csv:
-   - dùng SHAP gap rows làm weakest_indicators.
-5. Nếu có artifacts/gru/vietnam_forecast_2024_2030.csv:
-   - dùng GRU forecast làm baseline 2024–2030.
-   - sinh thêm 3 kịch bản pessimistic/base/optimistic.
-6. Nếu có data/subnational/sdg16_provinces.csv:
-   - xác định tỉnh yếu nhất.
-7. Search RAG evidence theo top chỉ số yếu.
-8. Gọi LLM nếu bật, hoặc trả fallback text nếu disabled.
-```
-
-Kết quả kiểm tra hiện tại:
-
-```text
-model_version = xgboost_shap_runner+gru_forecast+subnational_drilldown
-source        = shap_gap_analysis_csv+xgboost_shap_summary
-year          = 2023
-current_score = 64.0963
-observed_score = 63.7269
-top weak      = n_sdg16_rsf, n_sdg16_justice, n_sdg16_exprop
-province      = Hải Dương, score = 0.3772
-forecast_count = 21
-```
-
----
-
-## 11. Luồng Web/API serving
-
-Project hiện có stack web/API:
+Luồng serving:
 
 ```text
 Vue frontend
-  -> Nginx
-  -> Spring Boot backend
-  -> FastAPI ml-api
+  -> Nginx/Spring Boot proxy
+  -> FastAPI ML service
+  -> artifacts + RAG + LLM
+  -> final insight JSON
 ```
 
-Hoặc frontend có thể gọi thẳng FastAPI qua prefix `/ml`.
+Các endpoint quan trọng:
 
-Route chính:
+| Mục đích | Endpoint |
+|---|---|
+| Health/model status | `/health`, `/model` |
+| Explain input features | `/explain` |
+| Search RAG evidence | `/search` |
+| Ask LLM | `/ask` |
+| Final insight | `/ml/insights/final` |
 
-```text
-/api/      -> Spring Boot backend
-/ml/       -> FastAPI ml-api
-/actuator/ -> Spring Boot actuator
-```
+UI hiện hiển thị thêm:
 
-FastAPI endpoint:
+- Panel OLS diagnostics.
+- XGBoost leakage/circular target warning.
+- GRU forecast baseline mới.
+- Khuyến nghị cuối.
 
-```text
-GET  /health
-GET  /model/info
-POST /predict
-POST /explain
-POST /search
-POST /ask
-GET  /insights/final
-```
+## 11. Artifact đầu ra quan trọng
 
-Spring Boot public endpoint:
+| Phase | Artifact |
+|---|---|
+| Panel OLS | `artifacts/panel_ols/panel_ols_results.json` |
+| XGBoost optional | `artifacts/xgboost/metadata.json` |
+| XGBoost contribution | `artifacts/shap/shap_summary.json` |
+| Leakage report | `artifacts/shap/leakage_correlation_report.csv` |
+| GRU forecast | `artifacts/gru/vietnam_forecast_2024_2030.csv` |
+| Subnational | `artifacts/subnational/subnational_results.json` |
+| Model comparison | `artifacts/model_comparison/model_comparison.csv` |
 
-```text
-GET  /api/v1/health
-GET  /api/v1/model
-POST /api/v1/predictions
-POST /api/v1/explanations
-POST /api/v1/knowledge/search
-POST /api/v1/assistant/questions
-GET  /api/v1/insights/final
-```
+## 12. Checklist báo cáo cho đúng project
 
-Vai trò:
-
-- Vue hiển thị mô phỏng điểm, giải thích, recommendation và final insight.
-- Spring Boot đóng vai trò backend/proxy API public.
-- FastAPI là ML/RAG service chính.
-
----
-
-## 12. Docker Compose và cách chạy
-
-Chạy API/web:
-
-```powershell
-$env:BACKEND_PORT='8081'
-docker compose up -d --build ml-api backend frontend
-```
-
-Kiểm tra FastAPI:
-
-```powershell
-Invoke-RestMethod http://localhost:8000/health
-```
-
-Kiểm tra final insight:
-
-```powershell
-Invoke-RestMethod `
-  -Method Get `
-  -Uri "http://localhost:8000/insights/final?country=Vietnam&use_llm=false"
-```
-
-Nếu frontend chạy qua Nginx:
-
-```text
-http://localhost:3000
-```
-
----
-
-## 13. Artifact đầu ra quan trọng
-
-### 13.1. Model comparison
-
-```text
-artifacts/model_comparison/model_comparison.csv
-artifacts/model_comparison/model_comparison.json
-artifacts/model_comparison/best_model.json
-```
-
-Best model hiện tại:
-
-```text
-XGBoost SHAP Runner
-```
-
-### 13.2. SHAP
-
-```text
-artifacts/shap/shap_summary.json
-artifacts/shap/gap_analysis.csv
-artifacts/shap/global_shap_importance.csv
-artifacts/shap/xgboost_tuning_results.csv
-```
-
-### 13.3. GRU
-
-```text
-artifacts/gru/gru_summary.json
-artifacts/gru/vietnam_forecast_2024_2030.csv
-```
-
-### 13.4. Subnational
-
-```text
-artifacts/subnational/subnational_results.json
-figures/provincial_heatmap.png
-```
-
-### 13.5. RAG
-
-```text
-data/knowledge/text/
-data/knowledge/processed/chunks.jsonl
-data/knowledge/processed/parse_report.json
-```
-
----
-
-## 14. Checklist kiểm tra luồng hoàn chỉnh
-
-Chạy toàn bộ model pipeline:
-
-```powershell
-python scripts\optimize_and_compare_models.py
-```
-
-Pipeline này hiện chạy:
-
-```text
-1. Run Phase-1 Panel OLS + Fixed Effects
-2. Tune/evaluate XGBoost + SHAP runner
-3. Tune/evaluate GRU sequence forecaster
-4. Train optional Phase-2 XGBoost pipeline
-5. Run Phase-5 subnational drill-down
-6. Print final model comparison
-```
-
-Chạy test:
-
-```powershell
-python -m pytest tests -q
-```
-
-Kết quả mong đợi:
-
-```text
-7 passed
-```
-
-Kiểm tra Phase 1 riêng:
-
-```powershell
-python scripts\run_panel_ols.py
-```
-
-Kết quả mong đợi:
-
-```text
-Entity+Time FE R² within: 0.6297
-Entity+Time FE R² overall: 0.6263
-Artifacts written to artifacts/panel_ols/panel_ols_results.json
-```
-
-Kiểm tra Phase 4 riêng:
-
-```powershell
-python scripts\run_subnational.py
-```
-
-Kết quả mong đợi:
-
-```text
-Panel observations: 315
-Mapped dimensions: ['CPI', 'Admin', 'Justice', 'Power', 'Security']
-estimator: linearmodels_panel_ols_entity_fe
-```
-
-Kiểm tra final insight offline:
-
-```text
-current_score lấy từ XGBoost/SHAP
-weakest_indicators lấy từ SHAP gap analysis
-forecasts lấy từ GRU 2024–2030 và sinh 3 kịch bản
-province trả tỉnh yếu nhất từ sdg16_provinces.csv
-recommendation dùng RAG/LLM hoặc fallback
-```
-
----
-
-## 15. Kết luận luồng hiện tại
-
-Project hiện đã khớp với luồng mục tiêu ở mức hệ thống:
-
-```text
-Phase 1 Panel OLS + Fixed Effects
--> Phase 2 XGBoost
--> Phase 3 SHAP
--> Phase 4 Drill-down tỉnh
--> Phase 5 GRU forecast
--> Phase 6 RAG + LLM
--> Final output
-```
-
-Phase 1 hiện đã dùng đúng Panel OLS + Fixed Effects. Spark Linear Regression chỉ còn là legacy fallback metadata, không phải luồng chính của Phase 1.
+- Phase 1 phải là Panel OLS + Fixed Effects.
+- XGBoost chính nằm ở `scripts/run_shap_sdg16_vietnam.py`.
+- XGBoost phải được gọi là composite-score reconstruction, không claim causal prediction.
+- GRU forecast phải dùng bảng 2024-2030 tăng từ 63.6456 lên 65.1743.
+- Subnational chỉ là drill-down hỗ trợ nếu dữ liệu tỉnh chưa được validate.
+- RAG + LLM là prototype recommendation engine, chưa claim expert validation nếu chưa có module đánh giá chuyên gia.

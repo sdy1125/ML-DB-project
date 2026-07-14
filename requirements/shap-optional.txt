@@ -1,5 +1,6 @@
-# Optional only for the legacy SHAPAnalyzer / API route copied from experiments.
-# The main project SHAP runner does NOT need this package:
+# Optional for official TreeExplainer output in the main SHAP runner.
+# If this package is not installed, the runner falls back to XGBoost
+# pred_contribs=True, which still returns Tree SHAP contributions:
 #   python scripts/run_shap_sdg16_vietnam.py
 #
 # On Windows + Python 3.13, shap may try to compile from source and require

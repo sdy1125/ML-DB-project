@@ -1,2 +1,1 @@
-"""Phase 4: SHAP-style explanation outputs."""
-
+"""Phase 4: XGBoost tree-contribution explanation outputs."""

@@ -195,6 +195,8 @@ class InsightService:
     def _load_shap_gap_rows(self) -> list[IndicatorInsight]:
         artifact = self.model_service.artifact
         candidates = [
+            self.shap_output_dir / "policy_priority_indicators.csv",
+            Path("artifacts") / "shap" / "policy_priority_indicators.csv",
             self.shap_output_dir / "gap_analysis.csv",
             Path("artifacts") / "shap" / "gap_analysis.csv",
             Path("shap_output") / "gap_analysis.csv",
@@ -209,6 +211,8 @@ class InsightService:
             for row in reader:
                 feature = row.get("feature", "")
                 if feature not in artifact.coefficients:
+                    continue
+                if row.get("headline_eligible", "true").strip().lower() in {"false", "0", "no"}:
                     continue
                 try:
                     value = float(row.get("vn_2022", row.get("value", 0)) or 0)
@@ -287,6 +291,9 @@ class InsightService:
             return None
         return {
             "leakage_status": report.get("leakage_status"),
+            "feature_policy": report.get("feature_policy"),
+            "circular_target_warning": report.get("circular_target_warning"),
+            "recommended_framing": report.get("recommended_framing"),
             "exact_duplicate_features": report.get("exact_duplicate_features", []),
             "high_corr_features_abs_ge_0_98": report.get("high_corr_features_abs_ge_0_98", {}),
             "suspicious_numeric_columns_abs_ge_0_98": report.get(

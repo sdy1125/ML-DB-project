@@ -162,6 +162,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .metric-pairs b { margin-bottom: 6px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
 .metric-pairs strong { color: var(--ink); font-size: 18px; font-variant-numeric: tabular-nums; }
 .diagnostic-card small, .diagnostic-note { color: var(--muted); font-size: 11px; line-height: 1.55; }
+.diagnostic-note.warning { color: #9a4b20; }
 .status-pill { display: inline-flex; margin-top: 12px; padding: 8px 10px; border-radius: 99px; font-size: 10px; font-weight: 800; }
 .status-pill.clean { color: var(--green); background: #e7f2df; }
 .mini-table { display: grid; gap: 7px; margin-top: 12px; }
